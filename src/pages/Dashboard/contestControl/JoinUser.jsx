@@ -1,0 +1,316 @@
+import React from "react";
+import { useEffect, useMemo, useState } from "react";
+import dayjs from "dayjs";
+import { Link, useParams } from "react-router-dom";
+import { useUser } from "../../../hooks/use-user";
+import { errorToast } from "../../../utils/toast";
+import axios from "../../../axios";
+import { FaArrowRightLong } from "react-icons/fa6";
+import Correct from "../../../Images/Vector.png";
+import bgImage from "../../../Images/Section (2).png";
+import Info from "../../../Images/ph_info-duotone.png";
+import Table from "../../../componant/Table/Table";
+import Cell from "../../../componant/Table/cell";
+import {
+  Menu,
+  MenuButton,
+  MenuList,
+  MenuItem,
+  MenuItemOption,
+  MenuGroup,
+  MenuOptionGroup,
+  MenuDivider,
+  InputGroup,
+  InputLeftElement,
+  Input,
+  Button,
+  InputRightAddon,
+  useDisclosure,
+  Drawer,
+  DrawerBody,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerOverlay,
+  DrawerContent,
+  DrawerCloseButton,
+} from '@chakra-ui/react'
+
+import { MdEdit, MdDelete } from "react-icons/md";
+import { HiStatusOnline } from "react-icons/hi";
+import { GrOverview } from "react-icons/gr";
+function ContestJoinUser() {
+  const {id} =useParams()
+  const [newID, setNewID] = useState(null);
+  const [data, setData] = useState([]);
+ 
+  console.log(data);
+  const {
+    isOpen: isOpen2,
+    onOpen: onOpen2,
+    onClose: onClose2,
+  } = useDisclosure();
+  const cancelRef = React.useRef();
+  const btnRef = React.useRef()
+
+  useEffect(() => {
+    async function fetchData() {
+      axios.get(`getAllUsersJoinedContest/${id}`).then((response) => {
+        console.log((response?.data))
+        if (response?.data) {
+          setData(response?.data?.result);
+        }
+      });
+    }
+    fetchData();
+  }, []);
+
+  const columns = React.useMemo(
+    () => [
+      {
+        Header: "Sr No.",
+        accessor: "srNo",
+        Cell: ({ value, row: { index } }) => (
+          <Cell text={index + 1} />
+        ),
+      },
+      {
+        Header: "User",
+        accessor: "name",
+        Cell: ({ value, row: { original } }) => (
+          <>
+            <Cell
+              text={`${original?.user?.name}`}
+              bold={"bold"}
+            //   onClick={() => history.push(`/d/order-history/${original?._id}`)}
+            />
+            {/* <Cell subtext={`${original?.user?.email}`} /> */}
+            {/* <div className="flex items-center justify-center gap-2 text-13 mt-2">
+            <div className="flex gap-2 ">
+            <div className="flex justify-center items-center gap-2">
+              <div className="w-10 bg-green-600 rounded-full p-1 h-1 "></div>
+              <h1 className="text-md font-bold text-green">
+                {original?.rightCount}
+              </h1>
+            </div>
+            <div className="flex justify-center items-center gap-2">
+              <div className="w-10 bg-redC rounded-full p-1 h-1 "></div>
+              <h1 className="text-md font-bold text-red">
+                {original?.wrongCount}
+              </h1>
+            </div>
+            <div className="flex justify-center items-center gap-2">
+              <div className="w-10 bg-yellow-400 rounded-full p-1 h-1 "></div>
+              <h1 className="text-md font-bold text-yellow-500">
+                {original?.skipCount}
+              </h1>
+            </div>
+          </div>
+            
+            </div> */}
+          </>
+        ),
+      },
+     
+      {
+        Header: "Email ",
+        accessor: "email",
+        Cell: ({ value, row: { original } }) => (
+          <>
+            <Cell text={`${original?.user?.email}`} />
+          </>
+        ),
+      },
+      // {
+      //   Header: "Remaining Balance",
+      //   accessor: "remaining",
+      //   Cell: ({ value, row: { original } }) => (
+      //     <>
+      //       <Cell text={`Rs. ${Math.ceil(value)}`} />
+      //     </>
+      //   ),
+      // },
+     
+      // {
+      //   Header: "Platform",
+      //   accessor: "platform",
+      //   Cell: ({ value, row: { original } }) => <Cell text={value} />,
+      // },
+
+      {
+        Header: "Created On",
+        accessor: "createdOn",
+        Cell: ({ value, row: { original } }) => (
+          <Cell text={dayjs(value).format("D MMM, YYYY h:mm A")} />
+        ),
+      },
+      {
+        Header: "Total Earning (Rs)",
+        accessor: "contestTotalEarning",
+        Cell: ({ value, row: { original } }) => <Cell text={`Rs. ${Math.ceil(original?.user?.contestTotalEarning)}`} />,
+      },
+      {
+        Header: "Wallet Balance (Rs.)",
+        accessor: "contestWalletAmount",
+        Cell: ({ value, row: { original } }) => <Cell text={`Rs. ${Math.ceil(original?.user?.contestWalletAmount)}`} />,
+      },
+   
+      {
+        Header: "Action",
+        accessor: "",
+        Cell: ({ value, row: { original } }) => {
+          return (
+            <>
+              <Menu>
+                <MenuButton
+                  as={Button}
+                  className="bg-purple "
+                  colorScheme="bgBlue"
+                  onClick={() => setNewID(original._id)}
+                >
+                  Actions
+                </MenuButton>
+                <MenuList>
+                  <Link to={`/dash/edit-course/${original._id}`}>
+                    <MenuItem>
+                      {" "}
+                      <MdEdit className="mr-4" /> Edit
+                    </MenuItem>
+                  </Link>
+
+                  <MenuItem onClick={onOpen2}>
+                    {" "}
+                    <HiStatusOnline className="mr-4" /> Hold User
+                  </MenuItem>
+
+                 
+                  <Link to={`/dash/view-question/${original._id}`}>
+                  <MenuItem>
+                    <GrOverview className="mr-4" /> Change Plan
+                  </MenuItem>
+                  </Link>
+                </MenuList>
+              </Menu>
+            </>
+          );
+        },
+      },
+    
+    ],
+   
+    [data]
+  );
+
+ 
+  return (
+    <div className="lg:py-8 py-4 bg-bgBlue"
+    style={{
+      backgroundImage: `url('${bgImage}')`,
+      backgroundSize: "cover",
+       backgroundRepeat: 'no-repeat',
+       backgroundPosition: 'center'
+    }}
+    >
+      <section class=" md:p-1 ">
+        <div class="py-4 ">
+        <div class="flex  justify-between items-center">
+            <div>
+              <h2 class="text-xl font-bold  mb-4 text-purple text-oswald">
+                {data && data[0]?.contestName}
+              </h2>
+            </div>
+            <div className=" w-96">
+              <InputGroup borderRadius={5} size="sm">
+                <InputLeftElement
+                  pointerEvents="none"
+                />
+                <Input
+                  type="text"
+                  placeholder="Search..."
+                  border="1px solid #949494"
+                />
+                <InputRightAddon p={0} border="none">
+                  <Button
+                    className="bg-purple"
+                    colorScheme="#FF782D"
+                    size="sm"
+                    borderLeftRadius={0}
+                    borderRightRadius={3.3}
+                    border="1px solid #949494"
+                  >
+                    Search
+                  </Button>
+                </InputRightAddon>
+              </InputGroup>
+            </div>
+
+            <div className="flex gap-2">
+              <Menu>
+                <MenuButton
+                  as={Button}
+                  colorScheme="#4D2C5E"
+                  zIndex={20}
+                  className="bg-bgBlue"
+                >
+                  Sort By
+                </MenuButton>
+                <MenuList zIndex={20}>
+                  <MenuItem>Download</MenuItem>
+                  <MenuItem>Create a Copy</MenuItem>
+                  <MenuItem>Mark as Draft</MenuItem>
+                  <MenuItem>Delete</MenuItem>
+                  <MenuItem>Attend a Workshop</MenuItem>
+                </MenuList>
+              </Menu>
+              <Menu>
+                <MenuButton
+                  as={Button}
+                  colorScheme="#FF782D"
+                  zIndex={20}
+                  className="bg-purple"
+                  ref={btnRef}  onClick={onOpen2}
+                >
+                  Filter By
+                </MenuButton>
+              
+              </Menu>
+            </div>
+            <Drawer
+        isOpen={isOpen2}
+        placement='right'
+        onClose={onClose2}
+        finalFocusRef={btnRef}
+      >
+        <DrawerOverlay />
+        <DrawerContent>
+          <DrawerCloseButton />
+          <DrawerHeader>Create your account</DrawerHeader>
+
+          <DrawerBody>
+            <Input placeholder='Type here...' />
+          </DrawerBody>
+
+          <DrawerFooter>
+            <Button variant='outline' mr={3} onClick={onClose2}>
+              Cancel
+            </Button>
+            <Button colorScheme='blue'>Save</Button>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
+          </div>
+          <div className="mt-2">
+          <Table
+            // isLoading={isLoading}
+            data={ data||[]}
+            columns={columns}
+            // total={data?.total}
+          />
+        </div>
+          
+        </div>
+      </section>
+    </div>
+  );
+}
+
+export default ContestJoinUser;
