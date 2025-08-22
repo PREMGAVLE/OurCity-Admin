@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import axios from "../../../axios";
 import Table from "../../../componant/Table/Table";
 import Cell from "../../../componant/Table/cell";
@@ -33,10 +33,11 @@ const SubcategoryPage = () => {
   const [loading, setLoading] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
   const toast = useToast();
+  const navigate=useNavigate();
 
   const [modalOpen, setModalOpen] = useState(false);
 
-  const [editId,setEditId]=useState(null);
+  const [editId, setEditId] = useState(null);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -55,7 +56,7 @@ const SubcategoryPage = () => {
 
   const openAddModal = () => {
     setEditId(null);
-    setFormData({ name: "", description: "", image: "", address:"", });
+    setFormData({ name: "", description: "", image: "", address: "" });
     setModalOpen(true);
   };
   // here
@@ -63,12 +64,13 @@ const SubcategoryPage = () => {
   const fetchSubcategories = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`/subcategory/getSubCategory/${categoryId}`);
+      const res = await axios.get(
+        `/subcategory/getSubCategoryByParent/${categoryId}`
+      );
       setSubcategories(res.data.result || []);
 
       console.log("Subcategory Created:", res.data.result);
       console.log("Fetched Subcategories:", res.data.result[0]);
-
     } catch (err) {
       console.error("Error fetching subcategories", err);
       toast({
@@ -91,7 +93,7 @@ const SubcategoryPage = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    const { name, description, image ,address} = formData;
+    const { name, description, image, address } = formData;
 
     if (!name.trim() || !image.trim()) {
       toast({
@@ -114,31 +116,24 @@ const SubcategoryPage = () => {
     };
 
     try {
-
-     
-
       setLoading(true);
-      if (editId){
+      if (editId) {
         // Edit mode
-        await axios.put(`/subcategory/updateSubcategory/${editId}`,payload);
+        await axios.put(`/subcategory/updateSubcategory/${editId}`, payload);
         // await axios.put("/subcategory/updateSubcategory",{...payload,
         //   _id:editId,
-         
+
         // });
-      // console.log(data)
-     console.log("Submitted Payload:", editId ? "EDIT" : "ADD", payload);
-     
+        // console.log(data)
+        console.log("Submitted Payload:", editId ? "EDIT" : "ADD", payload);
 
-      toast({ title: "Subcategory Updated!", status: "success" });
-
-      }else{
+        toast({ title: "Subcategory Updated!", status: "success" });
+      } else {
         // Add mode
-      await axios.post("/subcategory/createSubcategory", payload);
-      toast({ title: "Subcategory added!", status: "success" });
-
-
+        await axios.post("/subcategory/createSubcategory", payload);
+        toast({ title: "Subcategory added!", status: "success" });
       }
-      
+
       setModalOpen(false);
       fetchSubcategories(); // 👈 call again to reload
     } catch (err) {
@@ -153,7 +148,6 @@ const SubcategoryPage = () => {
       setLoading(false);
     }
     console.log("Payload going to backend:", payload);
-
   };
 
   const handleDelete = async () => {
@@ -179,26 +173,20 @@ const SubcategoryPage = () => {
     }
   };
 
-  const handleEditClick =(subcategory)=>{
-
+  const handleEditClick = (subcategory) => {
     setEditId(subcategory._id);
     setFormData({
-       name: subcategory.name,
-    description: subcategory.description,
-    address: subcategory.address,
-    image: subcategory.image,
-
+      name: subcategory.name,
+      description: subcategory.description,
+      address: subcategory.address,
+      image: subcategory.image,
     });
     setModalOpen(true);
-
-
-
-    };
-
-
-
-  
-
+  };
+const handleViewBusiness = (subcategoryId) => {
+    
+    navigate(`/dash/subcategory/${subcategoryId}/business`);
+  };
   const columns = useMemo(
     () => [
       {
@@ -209,13 +197,13 @@ const SubcategoryPage = () => {
       {
         Header: "Image",
         accessor: "image",
-        Cell: ({ value }) =>(
-      <img
-        src={value?.trim() ? value : "https://via.placeholder.com/64"}
-        alt="img"
-        className="w-16 h-16 object-cover rounded"
-      />
-    ),
+        Cell: ({ value }) => (
+          <img
+            src={value?.trim() ? value : "https://via.placeholder.com/64"}
+            alt="img"
+            className="w-16 h-16 object-cover rounded"
+          />
+        ),
       },
       {
         Header: "Name",
@@ -246,13 +234,25 @@ const SubcategoryPage = () => {
                 </MenuItem>
               </Link>
               {/* <Link to={`/subcategory/edit/${original._id}`}> */}
-                <MenuItem onClick={()=>handleEditClick(original)}>
-                  <MdEdit className="mr-2" /> Edit
-                </MenuItem>
+              <MenuItem onClick={() => handleEditClick(original)}>
+                <MdEdit className="mr-2" /> Edit
+              </MenuItem>
               {/* </Link> */}
-              <MenuItem onClick={openAlert}>
+              {/* <MenuItem onClick={openAlert}> */}
+              <MenuItem
+                onClick={() => {
+                  setSelectedId(original._id);
+                  openAlert();
+                }}
+              >
                 <MdDelete className="mr-2" /> Delete
               </MenuItem>
+
+              
+<MenuItem onClick={() => handleViewBusiness(original._id)}>
+        🏢 View Business
+      </MenuItem>
+
             </MenuList>
           </Menu>
         ),
@@ -272,7 +272,7 @@ const SubcategoryPage = () => {
       <br />
       {loading ? (
         <div className="fixed inset-0 bg-white z-50 flex items-center justify-center">
-       < Loding />
+          <Loding />
         </div>
       ) : (
         <div className="p-6">
@@ -325,7 +325,8 @@ const SubcategoryPage = () => {
             className="bg-white p-6 rounded-lg shadow-lg w-full max-w-lg"
           >
             <h2 className="text-xl font-semibold mb-4">
-              {editId?"Edit Subcategory" :"Add Subcategory"}</h2>
+              {editId ? "Edit Subcategory" : "Add Subcategory"}
+            </h2>
             <form onSubmit={handleSubmit} className="space-y-4">
               <input
                 type="text"
@@ -371,8 +372,7 @@ const SubcategoryPage = () => {
                   Cancel
                 </Button>
                 <Button type="submit" isLoading={loading} colorScheme="blue">
-
-                  {editId?"Update":"Add"}
+                  {editId ? "Update" : "Add"}
                 </Button>
               </div>
             </form>
@@ -382,6 +382,5 @@ const SubcategoryPage = () => {
     </>
   );
 };
-
 
 export default SubcategoryPage;
