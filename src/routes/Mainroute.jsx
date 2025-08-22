@@ -5,7 +5,8 @@ import NewDashboard from '../pages/Dashboard/main/NewDashboard';
 import { Riple } from 'react-loading-indicators';
 import NewLogin from '../pages/SignIn/NewLogin';
 import Carousel from '../pages/OfficerData/Corouasol';
-import SubCategory from '../pages/Categorypart/subCategory/SubCategory';
+// import SubcategoryPage from '../pages/Categorypart/subCategory/SubCategory';
+
 
 
 const Mainroute = () => {
@@ -37,7 +38,7 @@ const Mainroute = () => {
         <Route path='/login' element={<NewLogin />} />
 
         <Route path='/dash/*' element={<NewDashboard />} />
-        <Route path="/dash/subcategory/:categoryId" element={<SubCategory />} />
+       
 
 
 
