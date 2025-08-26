@@ -106,14 +106,23 @@ const SubcategoryPage = () => {
       return;
     }
 
-    const payload = {
-      name: name.trim(),
-      description: description.trim() || "No description",
-      image: image.trim(),
-      address: address,
-      isActive: true,
-      category: categoryId,
-    };
+    // const payload = {
+    //   name: name.trim(),
+    //   description: description.trim() || "No description",
+    //   image: image.trim(),
+    //   address: address,
+    //   isActive: true,
+    //   category: categoryId,
+    // };
+const payload = {
+    name: name?.trim() || "",
+    description: description?.trim() || "No description",
+    image: image?.trim() || "",
+    address: address || "",
+    isActive: true,
+    category: categoryId,
+  };
+
 
     try {
       setLoading(true);
@@ -130,7 +139,7 @@ const SubcategoryPage = () => {
         toast({ title: "Subcategory Updated!", status: "success" });
       } else {
         // Add mode
-        await axios.post("/subcategory/createSubcategory", payload);
+        await axios.post("subcategory/registerSubCategory", payload);
         toast({ title: "Subcategory added!", status: "success" });
       }
 
@@ -264,123 +273,139 @@ const handleViewBusiness = (subcategoryId) => {
   console.log("Modal Open State:", modalOpen);
 
   return (
-    <>
-      <NewNavbar />
-      <br />
-      <br />
-      <br />
-      <br />
-      {loading ? (
-        <div className="fixed inset-0 bg-white z-50 flex items-center justify-center">
-          <Loding />
-        </div>
-      ) : (
-        <div className="p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold">Subcategories</h2>
-            {/* <Link to={`/subcategory/add/${categoryId}`}>
-              <Button onClick={openAddModal} colorScheme="blue">+ Add Subcategory</Button>
-            </Link> */}
-            <Button onClick={openAddModal} colorScheme="blue">
-              + Add Subcategory
+  <>
+    <NewNavbar />
+
+    {loading ? (
+      <div className="fixed inset-0 bg-white z-50 flex items-center justify-center">
+        <Loding />
+      </div>
+    ) : (
+      <div className="p-4 md:p-6 mt-20 pt-12">
+        {/* HEADER */}
+        <div className="flex flex-col md:flex-row justify-between md:items-center mb-6 gap-4">
+          
+          {/* LEFT SIDE */}
+          <div className="flex flex-col gap-2">
+            <h2 className="text-xl md:text-2xl font-bold">Subcategories</h2>
+            <Button size="sm" md-size="md" colorScheme="green" variant="solid" >
+              Total Subcategories : {subcategories.length}
             </Button>
           </div>
+
+          {/* RIGHT SIDE */}
+          <div className="flex justify-center md:justify-end">
+            <Button 
+            onClick={openAddModal} 
+            colorScheme="blue" 
+            className="self-start md:self-auto"
+          >
+            + Add Subcategory
+          </Button>
+          </div>
+          
+        </div>
+
+        {/* TABLE */}
+        <div className="overflow-x-auto">
           <Table data={subcategories} columns={columns} />
         </div>
-      )}
+      </div>
+    )}
 
-      {/* Alert Dialog for delete */}
-      <AlertDialog
-        isOpen={isAlertOpen}
-        leastDestructiveRef={cancelRef}
-        onClose={closeAlert}
-      >
-        <AlertDialogOverlay>
-          <AlertDialogContent>
-            <AlertDialogHeader fontSize="lg" fontWeight="bold">
-              Delete Subcategory
-            </AlertDialogHeader>
+    {/* ALERT DIALOG */}
+    <AlertDialog
+      isOpen={isAlertOpen}
+      leastDestructiveRef={cancelRef}
+      onClose={closeAlert}
+    >
+      <AlertDialogOverlay>
+        <AlertDialogContent>
+          <AlertDialogHeader fontSize="lg" fontWeight="bold">
+            Delete Subcategory
+          </AlertDialogHeader>
 
-            <AlertDialogBody>
-              Are you sure you want to delete this subcategory?
-            </AlertDialogBody>
+          <AlertDialogBody>
+            Are you sure you want to delete this subcategory?
+          </AlertDialogBody>
 
-            <AlertDialogFooter>
-              <Button ref={cancelRef} onClick={closeAlert}>
+          <AlertDialogFooter>
+            <Button ref={cancelRef} onClick={closeAlert}>
+              Cancel
+            </Button>
+            <Button colorScheme="red" onClick={handleDelete} ml={3}>
+              Delete
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialogOverlay>
+    </AlertDialog>
+
+    {/* MODAL */}
+    {modalOpen && (
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[999]">
+        <motion.div
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          className="bg-white p-6 rounded-lg shadow-lg w-full max-w-lg mx-4"
+        >
+          <h2 className="text-lg md:text-xl font-semibold mb-4">
+            {editId ? "Edit Subcategory" : "Add Subcategory"}
+          </h2>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <input
+              type="text"
+              placeholder="Subcategory Name"
+              value={formData.name}
+              onChange={(e) =>
+                setFormData({ ...formData, name: e.target.value })
+              }
+              className="border w-full px-3 py-2 rounded"
+              required
+            />
+            <input
+              type="text"
+              placeholder="Description"
+              value={formData.description}
+              onChange={(e) =>
+                setFormData({ ...formData, description: e.target.value })
+              }
+              className="border w-full px-3 py-2 rounded"
+            />
+            <input
+              type="text"
+              placeholder="Address"
+              value={formData.address}
+              onChange={(e) =>
+                setFormData({ ...formData, address: e.target.value })
+              }
+              className="border w-full px-3 py-2 rounded"
+            />
+            <input
+              type="text"
+              placeholder="Image URL"
+              value={formData.image}
+              onChange={(e) =>
+                setFormData({ ...formData, image: e.target.value })
+              }
+              className="border w-full px-3 py-2 rounded"
+              required
+            />
+            <div className="flex justify-end gap-2">
+              <Button onClick={() => setModalOpen(false)} variant="outline">
                 Cancel
               </Button>
-              <Button colorScheme="red" onClick={handleDelete} ml={3}>
-                Delete
+              <Button type="submit" isLoading={loading} colorScheme="blue">
+                {editId ? "Update" : "Add"}
               </Button>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialogOverlay>
-      </AlertDialog>
+            </div>
+          </form>
+        </motion.div>
+      </div>
+    )}
+  </>
+);
 
-      {modalOpen && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[999]">
-          <motion.div
-            initial={{ scale: 0.8, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="bg-white p-6 rounded-lg shadow-lg w-full max-w-lg"
-          >
-            <h2 className="text-xl font-semibold mb-4">
-              {editId ? "Edit Subcategory" : "Add Subcategory"}
-            </h2>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <input
-                type="text"
-                placeholder="Subcategory Name"
-                value={formData.name}
-                onChange={(e) =>
-                  setFormData({ ...formData, name: e.target.value })
-                }
-                className="border w-full px-3 py-2 rounded"
-                required
-              />
-              <input
-                type="text"
-                placeholder="Description"
-                value={formData.description}
-                onChange={(e) =>
-                  setFormData({ ...formData, description: e.target.value })
-                }
-                className="border w-full px-3 py-2 rounded"
-              />
-              <input
-                type="text"
-                placeholder="Address"
-                value={formData.address}
-                onChange={(e) =>
-                  setFormData({ ...formData, address: e.target.value })
-                }
-                className="border w-full px-3 py-2 rounded"
-              />
-
-              <input
-                type="text"
-                placeholder="Image URL"
-                value={formData.image}
-                onChange={(e) =>
-                  setFormData({ ...formData, image: e.target.value })
-                }
-                className="border w-full px-3 py-2 rounded"
-                required
-              />
-              <div className="flex justify-end gap-2">
-                <Button onClick={() => setModalOpen(false)} variant="outline">
-                  Cancel
-                </Button>
-                <Button type="submit" isLoading={loading} colorScheme="blue">
-                  {editId ? "Update" : "Add"}
-                </Button>
-              </div>
-            </form>
-          </motion.div>
-        </div>
-      )}
-    </>
-  );
 };
 
 export default SubcategoryPage;
