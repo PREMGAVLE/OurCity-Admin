@@ -22,11 +22,17 @@ const DashHome = () => {
   // DailyCollections
   useEffect(() => {
     async function fetchData() {
-      axios.get(`/admins/totalCollectionsToday`).then((response) => {
-        if (response?.data) {
-          setDailyCollection(response?.data?.result?.totalAmount);
+      try {
+        const response = await axios.get(`/admins/totalCollectionsToday`);
+        if (response?.data && response.status !== 404) {
+          setDailyCollection(response?.data?.result?.totalAmount || 0);
+        } else {
+          setDailyCollection(0);
         }
-      });
+      } catch (error) {
+        console.error("Error fetching daily collections:", error);
+        setDailyCollection(0);
+      }
     }
     fetchData();
   }, []);
@@ -34,17 +40,25 @@ const DashHome = () => {
   // total outgoing
   useEffect(() => {
     async function fetchData() {
-      axios.get("users/").then((response) => {
-        if (response?.data) {
-          setUserData(response?.data?.result);
+      try {
+        const response = await axios.get("/Users/userDetails");
+        if (response?.data && response.status !== 404) {
+          setUserData(response?.data?.result || []);
+          
+          const sum = (response.data.result || []).reduce((acc, item) => {
+            return acc + (item.active_loan_id?.total_amount || 0);
+          }, 0);
+
+          setTotalLoanAmt(sum);
+        } else {
+          setUserData([]);
+          setTotalLoanAmt(0);
         }
-
-        const sum = response.data.result.reduce((acc, item) => {
-          return acc + (item.active_loan_id?.total_amount || 0);
-        }, 0);
-
-        setTotalLoanAmt(sum);
-      });
+      } catch (error) {
+        console.error("Error fetching users:", error);
+        setUserData([]);
+        setTotalLoanAmt(0);
+      }
     }
     fetchData();
   }, []);
@@ -52,11 +66,17 @@ const DashHome = () => {
   // total collection
   useEffect(() => {
     async function fetchData() {
-      axios.get("/admins/totalCollections").then((response) => {
-        if (response?.data) {
-          setTotalCollection(response?.data?.result?.totalAmount);
+      try {
+        const response = await axios.get("/admins/totalCollections");
+        if (response?.data && response.status !== 404) {
+          setTotalCollection(response?.data?.result?.totalAmount || 0);
+        } else {
+          setTotalCollection(0);
         }
-      });
+      } catch (error) {
+        console.error("Error fetching total collections:", error);
+        setTotalCollection(0);
+      }
     }
     fetchData();
   }, []);
@@ -64,9 +84,15 @@ const DashHome = () => {
   // Monthly Collections
   useEffect(() => {
     async function fetchData() {
-      axios.get("/admins/totalCollectionsMonthly").then(() => {
+      try {
+        const response = await axios.get("/admins/totalCollectionsMonthly");
+        if (response?.status === 404) {
+          console.warn("Monthly collections endpoint not available");
+        }
         // Reserved for future use if needed
-      });
+      } catch (error) {
+        console.error("Error fetching monthly collections:", error);
+      }
     }
     fetchData();
   }, []);
@@ -74,16 +100,26 @@ const DashHome = () => {
   // Monthly Collections Array Format
   useEffect(() => {
     async function fetchData() {
-      axios.get("/admins/totalCollectionsMonthlyStats").then((response) => {
-        if (response?.data) {
-          setData(response?.data?.result);
-          const res = response?.data?.result;
+      try {
+        const response = await axios.get("/admins/totalCollectionsMonthlyStats");
+        if (response?.data && response.status !== 404) {
+          setData(response?.data?.result || []);
+          const res = response?.data?.result || [];
           const months = res.map((e) => e.month);
           const monthsAmt = res.map((e) => e.totalAmount);
           setMonthData(months);
           setMonthlyAmtData(monthsAmt);
+        } else {
+          setData([]);
+          setMonthData([]);
+          setMonthlyAmtData([]);
         }
-      });
+      } catch (error) {
+        console.error("Error fetching monthly stats:", error);
+        setData([]);
+        setMonthData([]);
+        setMonthlyAmtData([]);
+      }
     }
     fetchData();
   }, []);
@@ -91,16 +127,26 @@ const DashHome = () => {
   // Weekly Collections Array Format
   useEffect(() => {
     async function fetchData() {
-      axios.get("/admins/totalCollectionsWeeklyStats").then((response) => {
-        if (response?.data) {
-          setWeekData(response?.data?.result?.dailyStats);
-          const res = response?.data?.result?.dailyStats;
+      try {
+        const response = await axios.get("/admins/totalCollectionsWeeklyStats");
+        if (response?.data && response.status !== 404) {
+          setWeekData(response?.data?.result?.dailyStats || []);
+          const res = response?.data?.result?.dailyStats || [];
           const weeks = res.map((e) => e.day);
           const weeksAmt = res.map((e) => e.totalAmount);
           setweekDays(weeks);
           setweekAmtData(weeksAmt);
+        } else {
+          setWeekData([]);
+          setweekDays([]);
+          setweekAmtData([]);
         }
-      });
+      } catch (error) {
+        console.error("Error fetching weekly stats:", error);
+        setWeekData([]);
+        setweekDays([]);
+        setweekAmtData([]);
+      }
     }
     fetchData();
   }, []);
@@ -139,7 +185,7 @@ const DashHome = () => {
           📈
         </CardDataStats>
         <CardDataStats
-          title="Total Loan Customer"
+          title="Total Users"
           total={userdata.length}
           rate="-2.3%"
           levelDown

@@ -24,8 +24,12 @@ import {
   MenuButton,
   MenuList,
   MenuItem,
+  Input,
+  InputGroup,
+  InputLeftElement,
+  InputRightAddon,
 } from "@chakra-ui/react";
-import { MdDelete, MdEdit } from "react-icons/md";
+import { MdDelete, MdEdit, MdSearch } from "react-icons/md";
 import RegisterBusinessForm from "../buisnesspart/buisnessComponents/RegisterBusinessForm";
 
 const UserBusinessList = () => {
@@ -34,6 +38,7 @@ const UserBusinessList = () => {
   const [categories, setCategories] = useState([]);
   const [editingBusiness, setEditingBusiness] = useState(null);
   const [selectedBusinessID, setSelectedBusinessID] = useState(null);
+  const [search, setSearch] = useState("");
   const toast = useToast();
   const { isOpen, onOpen, onClose } = useDisclosure();
   const {
@@ -134,16 +139,72 @@ const UserBusinessList = () => {
     },
   ], [businesses]);
 
+  // Filter businesses based on search
+  const filteredBusinesses = useMemo(() => {
+    if (!search.trim()) return businesses;
+    
+    return businesses.filter((business) => {
+      const searchTerm = search.toLowerCase();
+      const businessName = (business.name || "").toLowerCase();
+      const businessLocation = (business.location || "").toLowerCase();
+      const categoryName = business.category && typeof business.category === 'object' 
+        ? (business.category.name || "").toLowerCase() 
+        : (business.category || "").toLowerCase();
+      
+      return businessName.includes(searchTerm) || 
+             businessLocation.includes(searchTerm) || 
+             categoryName.includes(searchTerm);
+    });
+  }, [businesses, search]);
+
   return (
     <div className="p-20">
       <div className="flex justify-between mb-4">
-        <h1 className="text-2xl font-bold">User’s Businesses</h1>
-        <Button colorScheme="blue" onClick={() => { setEditingBusiness(null); onOpen(); }}>
-          Add Business
-        </Button>
+        <h1 className="text-2xl font-bold">User's Businesses</h1>
       </div>
 
-      <Table data={businesses} columns={columns} />
+      {/* Summary Section */}
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center gap-4">
+          <Button colorScheme="green" size="md">
+            Total Businesses: {businesses.length}
+          </Button>
+          <Button colorScheme="blue" onClick={() => { setEditingBusiness(null); onOpen(); }}>
+            Add Business
+          </Button>
+        </div>
+
+        {/* Search Section */}
+        <div className="w-96">
+          <InputGroup size="md">
+            <InputLeftElement pointerEvents="none">
+              <MdSearch color="gray.400" />
+            </InputLeftElement>
+            <Input
+              placeholder="Search businesses by name, location, or category..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              border="1px solid #949494"
+              _hover={{ borderColor: "gray.300" }}
+              _focus={{ borderColor: "blue.500", boxShadow: "outline" }}
+            />
+            <InputRightAddon p={0} border="none">
+              <Button
+                className="bg-purple"
+                colorScheme="purple"
+                size="md"
+                borderLeftRadius={0}
+                borderRightRadius={3.3}
+                border="1px solid #949494"
+              >
+                Search
+              </Button>
+            </InputRightAddon>
+          </InputGroup>
+        </div>
+      </div>
+
+      <Table data={filteredBusinesses} columns={columns} />
 
       {/* Business Form Modal */}
       <Modal isOpen={isOpen} onClose={() => { setEditingBusiness(null); onClose(); }} size="lg">
