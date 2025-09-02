@@ -28,4 +28,23 @@ instance.interceptors.request.use(
   }
 );
 
+// Add response interceptor to handle errors gracefully
+instance.interceptors.response.use(
+  (response) => {
+    return response;
+  },
+  (error) => {
+    // Handle 404 errors gracefully without showing popups
+    if (error.response && error.response.status === 404) {
+      console.warn("API endpoint not found:", error.config.url);
+      // Return a resolved promise with empty data to prevent unhandled rejections
+      return Promise.resolve({ data: null, status: 404 });
+    }
+    
+    // Handle other errors
+    console.error("API Error:", error);
+    return Promise.reject(error);
+  }
+);
+
 export default instance;

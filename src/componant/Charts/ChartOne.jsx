@@ -20,7 +20,7 @@ const ChartOne = () => {
     async function fetchData() {
       try {
         const response = await axios.get("/admins/totalCollectionsMonthlyStats");
-        if (response?.data?.result) {
+        if (response?.data?.result && response.status !== 404) {
           const res = response.data.result;
           const months = res.map((e) => e.month);
           const monthsAmt = res.map((e) => e.totalAmount);
@@ -32,9 +32,24 @@ const ChartOne = () => {
             { name: "Loan", data: monthsAmt },
             { name: "Product Two", data: [30992, 2500, 36000, 3077, 45, 35, 64, 52, 59, 36, 39, 51] },
           ]);
+        } else {
+          // Use default data when API is not available
+          setMonthData(['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun']);
+          setMonthlyAmtData([0, 0, 0, 0, 0, 0]);
+          setSeries([
+            { name: "Loan", data: [0, 0, 0, 0, 0, 0] },
+            { name: "Product Two", data: [30992, 2500, 36000, 3077, 45, 35] },
+          ]);
         }
       } catch (error) {
         console.error("Error fetching data:", error);
+        // Use default data when API fails
+        setMonthData(['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun']);
+        setMonthlyAmtData([0, 0, 0, 0, 0, 0]);
+        setSeries([
+          { name: "Loan", data: [0, 0, 0, 0, 0, 0] },
+          { name: "Product Two", data: [30992, 2500, 36000, 3077, 45, 35] },
+        ]);
       }
     }
 

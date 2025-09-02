@@ -20,7 +20,7 @@ const ChartTwo = () => {
     async function fetchData() {
       try {
         const response = await axios.get("/admins/totalCollectionsWeeklyStats");
-        if (response?.data?.result?.dailyStats) {
+        if (response?.data?.result?.dailyStats && response.status !== 404) {
           const dailyStats = response.data.result.dailyStats;
 
           const weeks = dailyStats.map((e) => e.day);
@@ -34,9 +34,24 @@ const ChartTwo = () => {
             { name: 'Loans', data: weeksAmt },
             { name: 'Revenue', data: [13, 23, 20, 8, 13, 27, 15] },
           ]);
+        } else {
+          // Use default data when API is not available
+          setWeekDays(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']);
+          setWeekAmtData([0, 0, 0, 0, 0, 0, 0]);
+          setSeries([
+            { name: 'Loans', data: [0, 0, 0, 0, 0, 0, 0] },
+            { name: 'Revenue', data: [13, 23, 20, 8, 13, 27, 15] },
+          ]);
         }
       } catch (error) {
         console.error("Error fetching data:", error);
+        // Use default data when API fails
+        setWeekDays(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']);
+        setWeekAmtData([0, 0, 0, 0, 0, 0, 0]);
+        setSeries([
+          { name: 'Loans', data: [0, 0, 0, 0, 0, 0, 0] },
+          { name: 'Revenue', data: [13, 23, 20, 8, 13, 27, 15] },
+        ]);
       }
     }
 

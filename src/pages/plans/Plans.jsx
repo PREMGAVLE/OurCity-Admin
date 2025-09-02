@@ -29,12 +29,13 @@ import {
   useToast,
   Select,
 } from "@chakra-ui/react";
-import { MdEdit, MdDelete } from "react-icons/md";
+import { MdEdit, MdDelete, MdSearch } from "react-icons/md";
 
 const Plans = () => {
   const [plans, setPlans] = useState([]);
-  const [form, setForm] = useState({ title: "", price: "", type: "monthly", features: "" });
+  const [form, setForm] = useState({ title: "", price: "", type: "Basic", duration: "Limited", validity: "", features: "" });
   const [searchTerm, setSearchTerm] = useState("");
+  const [filterType, setFilterType] = useState("all");
   const [editingId, setEditingId] = useState(null);
   const [selectedPlanId, setSelectedPlanId] = useState(null);
 
@@ -65,6 +66,7 @@ const Plans = () => {
       name: form.title.trim(), // backend ke liye 'name'
       price: Number(form.price),
       type: form.type,
+      validity: Number(form.validity),
       features: form.features.split(",").map(f => f.trim()),
     };
 
@@ -77,7 +79,7 @@ const Plans = () => {
         toast({ title: "Plan created successfully", status: "success", duration: 3000 });
       }
 
-      setForm({ title: "", price: "", type: "monthly", features: "" });
+      setForm({ title: "", price: "", type: "Basic", duration: "Limited", validity: "", features: "" });
       setEditingId(null);
       closeDrawer();
       fetchPlans();
@@ -96,11 +98,23 @@ const Plans = () => {
     setForm({
       title: plan.name || "", // editing form input
       price: plan.price || "",
-      type: plan.type || "monthly",
+      type: plan.type || "Basic",
+      duration: plan.duration || "Limited",
+      validity: plan.validity || "",
       features: Array.isArray(plan.features) ? plan.features.join(", ") : "",
     });
     setEditingId(plan._id);
     openDrawer();
+  };
+
+  const handleTypeChange = (newType) => {
+    let newDuration = "Limited";
+    if (newType === "Standard") {
+      newDuration = "Monthly";
+    } else if (newType === "Premium") {
+      newDuration = "Yearly";
+    }
+    setForm({ ...form, type: newType, duration: newDuration });
   };
 
   const handleDelete = async () => {
@@ -133,7 +147,21 @@ const Plans = () => {
     {
       Header: "Type",
       accessor: "type",
-      Cell: ({ value }) => <Cell text={value === "monthly" ? "Monthly" : "Yearly"} />,
+      Cell: ({ value }) => <Cell text={value || ""} />,
+    },
+    {
+      Header: "Duration",
+      accessor: "duration",
+      Cell: ({ row }) => {
+        const planType = row.original.type;
+        let displayDuration = "Limited"; // default
+        if (planType === "Standard") {
+          displayDuration = "Monthly";
+        } else if (planType === "Premium") {
+          displayDuration = "Yearly";
+        }
+        return <Cell text={displayDuration} />;
+      },
     },
     {
       Header: "Features",
@@ -156,30 +184,86 @@ const Plans = () => {
     },
   ], []);
 
-  const filteredPlans = Array.isArray(plans)
-    ? plans.filter((plan) =>
+  const filteredPlans = useMemo(() => {
+    let filtered = Array.isArray(plans) ? plans : [];
+    
+    // Apply type filter
+    if (filterType !== "all") {
+      filtered = filtered.filter((plan) => {
+        const planType = plan.type ? plan.type.trim() : "";
+        const selectedFilterType = filterType ? filterType.trim() : "";
+        return planType === selectedFilterType;
+      });
+    }
+    
+    // Apply search filter
+    if (searchTerm.trim()) {
+      filtered = filtered.filter((plan) =>
         (plan.name || "").toLowerCase().includes(searchTerm.toLowerCase())
-      )
-    : [];
+      );
+    }
+    
+    return filtered;
+  }, [plans, filterType, searchTerm]);
 
   return (
     <div className="py-20 bg-bgWhite">
       <section className="md:p-4">
         <div className="flex justify-between items-center mb-6">
-          <Button ref={btnRef} colorScheme="purple" onClick={openDrawer}>Add New Plan</Button>
-          <div className="w-96">
-            <InputGroup size="sm">
-              <InputLeftElement pointerEvents="none" />
-              <Input
-                placeholder="Search by title..."
+          <div className="flex gap-2 items-center">
+            <Button colorScheme="green" variant="solid">
+              Total Plans: {(plans || []).length}
+            </Button>
+            <Button ref={btnRef} colorScheme="purple" onClick={openDrawer}>Add New Plan</Button>
+          </div>
+          <div className="flex gap-4 items-center">
+            {/* Filter Dropdown */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-gray-700">Plans:</span>
+              <Select
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value)}
+                size="sm"
+                width="120px"
                 border="1px solid #949494"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-              <InputRightAddon border="none">
-                <Button className="bg-emerald-400" size="sm">Search</Button>
-              </InputRightAddon>
-            </InputGroup>
+                _hover={{ borderColor: "gray.300" }}
+                _focus={{ borderColor: "blue.500", boxShadow: "outline" }}
+              >
+                              <option value="all">All</option>
+              <option value="Basic">Basic</option>
+              <option value="Standard">Standard</option>
+              <option value="Premium">Premium</option>
+              </Select>
+            </div>
+            
+            {/* Search Input */}
+            <div className="w-80">
+              <InputGroup size="md">
+                <InputLeftElement pointerEvents="none">
+                  <MdSearch color="gray.400" />
+                </InputLeftElement>
+                <Input
+                  placeholder="Search by title..."
+                  border="1px solid #949494"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  _hover={{ borderColor: "gray.300" }}
+                  _focus={{ borderColor: "blue.500", boxShadow: "outline" }}
+                />
+                <InputRightAddon p={0} border="none">
+                  <Button 
+                    className="bg-purple" 
+                    colorScheme="purple"
+                    size="md"
+                    borderLeftRadius={0}
+                    borderRightRadius={3.3}
+                    border="1px solid #949494"
+                  >
+                    Search
+                  </Button>
+                </InputRightAddon>
+              </InputGroup>
+            </div>
           </div>
         </div>
 
@@ -208,12 +292,27 @@ const Plans = () => {
             />
             <Select
               value={form.type}
-              onChange={(e) => setForm({ ...form, type: e.target.value })}
+              onChange={(e) => handleTypeChange(e.target.value)}
               className="mb-4"
             >
-              <option value="monthly">Monthly</option>
-              <option value="yearly">Yearly</option>
+              <option value="Basic">Basic</option>
+              <option value="Standard">Standard</option>
+              <option value="Premium">Premium</option>
             </Select>
+            <Input
+              placeholder="Duration"
+              value={form.duration}
+              isReadOnly
+              className="mb-4"
+              bg="gray.100"
+            />
+            <Input
+              placeholder="Validity (in days)"
+              type="number"
+              value={form.validity}
+              onChange={(e) => setForm({ ...form, validity: e.target.value })}
+              className="mb-4"
+            />
             <Input
               placeholder="Features (comma separated)"
               value={form.features}
