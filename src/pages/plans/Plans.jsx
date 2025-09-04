@@ -33,7 +33,7 @@ import { MdEdit, MdDelete, MdSearch } from "react-icons/md";
 
 const Plans = () => {
   const [plans, setPlans] = useState([]);
-  const [form, setForm] = useState({ title: "", price: "", type: "Basic", duration: "Limited", validity: "", features: "" });
+  const [form, setForm] = useState({ title: "", price: "", type: "Basic", validity: "Monthly", features: "" });
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("all");
   const [editingId, setEditingId] = useState(null);
@@ -49,7 +49,9 @@ const Plans = () => {
   const fetchPlans = async () => {
     try {
       const res = await axios.get("/plan/GetAllPlans");
+      console.log(res)
       setPlans(res.data.result || []);
+      // console.log("plans",res.data.result)
     } catch (err) {
       console.error("Error fetching plans", err);
     }
@@ -66,7 +68,7 @@ const Plans = () => {
       name: form.title.trim(), // backend ke liye 'name'
       price: Number(form.price),
       type: form.type,
-      validity: Number(form.validity),
+      validity: form.validity,
       features: form.features.split(",").map(f => f.trim()),
     };
 
@@ -79,7 +81,7 @@ const Plans = () => {
         toast({ title: "Plan created successfully", status: "success", duration: 3000 });
       }
 
-      setForm({ title: "", price: "", type: "Basic", duration: "Limited", validity: "", features: "" });
+      setForm({ title: "", price: "", type: "Basic", validity: "Monthly", features: "" });
       setEditingId(null);
       closeDrawer();
       fetchPlans();
@@ -99,23 +101,14 @@ const Plans = () => {
       title: plan.name || "", // editing form input
       price: plan.price || "",
       type: plan.type || "Basic",
-      duration: plan.duration || "Limited",
-      validity: plan.validity || "",
+      validity: plan.validity || "Monthly",
       features: Array.isArray(plan.features) ? plan.features.join(", ") : "",
     });
     setEditingId(plan._id);
     openDrawer();
   };
 
-  const handleTypeChange = (newType) => {
-    let newDuration = "Limited";
-    if (newType === "Standard") {
-      newDuration = "Monthly";
-    } else if (newType === "Premium") {
-      newDuration = "Yearly";
-    }
-    setForm({ ...form, type: newType, duration: newDuration });
-  };
+
 
   const handleDelete = async () => {
     try {
@@ -150,18 +143,9 @@ const Plans = () => {
       Cell: ({ value }) => <Cell text={value || ""} />,
     },
     {
-      Header: "Duration",
-      accessor: "duration",
-      Cell: ({ row }) => {
-        const planType = row.original.type;
-        let displayDuration = "Limited"; // default
-        if (planType === "Standard") {
-          displayDuration = "Monthly";
-        } else if (planType === "Premium") {
-          displayDuration = "Yearly";
-        }
-        return <Cell text={displayDuration} />;
-      },
+      Header: "Validity",
+      accessor: "validity",
+      Cell: ({ value }) => <Cell text={value || ""} />,
     },
     {
       Header: "Features",
@@ -187,12 +171,12 @@ const Plans = () => {
   const filteredPlans = useMemo(() => {
     let filtered = Array.isArray(plans) ? plans : [];
     
-    // Apply type filter
+    // Apply validity filter
     if (filterType !== "all") {
       filtered = filtered.filter((plan) => {
-        const planType = plan.type ? plan.type.trim() : "";
+        const planValidity = plan.validity ? plan.validity.trim() : "";
         const selectedFilterType = filterType ? filterType.trim() : "";
-        return planType === selectedFilterType;
+        return planValidity === selectedFilterType;
       });
     }
     
@@ -219,8 +203,8 @@ const Plans = () => {
           <div className="flex gap-4 items-center">
             {/* Filter Dropdown */}
             <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-gray-700">Plans:</span>
-              <Select
+              <span className="text-sm font-medium text-gray-700">Validity:</span>
+                            <Select
                 value={filterType}
                 onChange={(e) => setFilterType(e.target.value)}
                 size="sm"
@@ -229,10 +213,9 @@ const Plans = () => {
                 _hover={{ borderColor: "gray.300" }}
                 _focus={{ borderColor: "blue.500", boxShadow: "outline" }}
               >
-                              <option value="all">All</option>
-              <option value="Basic">Basic</option>
-              <option value="Standard">Standard</option>
-              <option value="Premium">Premium</option>
+                <option value="all">All</option>
+                <option value="Monthly">Monthly</option>
+                <option value="Yearly">Yearly</option>
               </Select>
             </div>
             
@@ -278,7 +261,7 @@ const Plans = () => {
           <DrawerHeader>{editingId ? "Edit Plan" : "Create Plan"}</DrawerHeader>
           <DrawerBody>
             <Input
-              placeholder="Title"
+              placeholder="Title (e.g., Basic, Standard, Premium)"
               value={form.title}
               onChange={(e) => setForm({ ...form, title: e.target.value })}
               className="mb-4"
@@ -291,28 +274,24 @@ const Plans = () => {
               className="mb-4"
             />
             <Select
+              placeholder="Type"
               value={form.type}
-              onChange={(e) => handleTypeChange(e.target.value)}
+              onChange={(e) => setForm({ ...form, type: e.target.value })}
               className="mb-4"
             >
               <option value="Basic">Basic</option>
               <option value="Standard">Standard</option>
               <option value="Premium">Premium</option>
             </Select>
-            <Input
-              placeholder="Duration"
-              value={form.duration}
-              isReadOnly
-              className="mb-4"
-              bg="gray.100"
-            />
-            <Input
-              placeholder="Validity (in days)"
-              type="number"
+            <Select
+              placeholder="Validity"
               value={form.validity}
               onChange={(e) => setForm({ ...form, validity: e.target.value })}
               className="mb-4"
-            />
+            >
+              <option value="Monthly">Monthly</option>
+              <option value="Yearly">Yearly</option>
+            </Select>
             <Input
               placeholder="Features (comma separated)"
               value={form.features}

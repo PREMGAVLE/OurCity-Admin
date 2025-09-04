@@ -109,6 +109,12 @@ const UserBusinessList = () => {
       Cell: ({ value }) =>
         <Cell text={typeof value === 'object' && value !== null ? value.name : value || "N/A"} />
     },
+    {
+      Header: "Subcategory",
+      accessor: "subCategory",
+      Cell: ({ value }) =>
+        <Cell text={typeof value === 'object' && value !== null ? value.name : value || "N/A"} />
+    },
     { Header: "Location", accessor: "location", Cell: ({ value }) => <Cell text={value} /> },
     {
       Header: "Created At",
@@ -150,10 +156,14 @@ const UserBusinessList = () => {
       const categoryName = business.category && typeof business.category === 'object' 
         ? (business.category.name || "").toLowerCase() 
         : (business.category || "").toLowerCase();
+      const subcategoryName = business.subCategory && typeof business.subCategory === 'object' 
+        ? (business.subCategory.name || "").toLowerCase() 
+        : (business.subCategory || "").toLowerCase();
       
       return businessName.includes(searchTerm) || 
              businessLocation.includes(searchTerm) || 
-             categoryName.includes(searchTerm);
+             categoryName.includes(searchTerm) ||
+             subcategoryName.includes(searchTerm);
     });
   }, [businesses, search]);
 
@@ -181,7 +191,7 @@ const UserBusinessList = () => {
               <MdSearch color="gray.400" />
             </InputLeftElement>
             <Input
-              placeholder="Search businesses by name, location, or category..."
+              placeholder="Search businesses by name, location, category, or subcategory..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               border="1px solid #949494"
