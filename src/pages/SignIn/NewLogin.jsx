@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import axios from "../../axios";
 
-import LogoDark from "../../Images/logo.png";
+import LogoDark from "../../Images/Burhanpur_transparent.png";
 import HomeImage from "../../Images/secure-login-concept-illustration.png";
 
 const NewLogin = () => {
