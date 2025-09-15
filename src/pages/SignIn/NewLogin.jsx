@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import axios from "../../axios";
 
-import LogoDark from "../../Images/Sai-removebg-preview.png";
+import LogoDark from "../../Images/logo.png";
 import HomeImage from "../../Images/secure-login-concept-illustration.png";
 
 const NewLogin = () => {
@@ -42,7 +42,7 @@ const NewLogin = () => {
 
         <div className="w-full xl:w-1/2 border-stroke dark:border-strokedark xl:border-l-2 p-4 sm:p-12.5 xl:p-17.5">
           <h2 className="mb-9 text-2xl font-bold text-black dark:text-white sm:text-title-xl2">
-            Sign In to Sai Finance
+            Sign In to Burhanpur City
           </h2>
           <form onSubmit={handleLogin}>
             <div className="mb-4">
