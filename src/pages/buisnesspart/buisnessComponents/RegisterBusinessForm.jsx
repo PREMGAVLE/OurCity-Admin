@@ -35,6 +35,18 @@ const RegisterBusinessForm = ({
     }
   }, [formData.category]);
 
+  // Fetch subcategories when initialData changes (for edit mode)
+  useEffect(() => {
+    if (initialData && initialData.category) {
+      const categoryId = typeof initialData.category === 'object' && initialData.category !== null 
+        ? initialData.category._id 
+        : initialData.category;
+      if (categoryId) {
+        fetchSubcategories(categoryId);
+      }
+    }
+  }, [initialData]);
+
   // Fetch subcategories from API
   const fetchSubcategories = async (categoryId) => {
     try {
@@ -50,10 +62,20 @@ const RegisterBusinessForm = ({
 
   useEffect(() => {
     if (initialData) {
+      // Handle category - it might be an object with _id or just a string
+      const categoryId = typeof initialData.category === 'object' && initialData.category !== null 
+        ? initialData.category._id 
+        : initialData.category || '';
+      
+      // Handle subcategory - it might be an object with _id or just a string
+      const subCategoryId = typeof initialData.subCategory === 'object' && initialData.subCategory !== null
+        ? initialData.subCategory._id
+        : initialData.subCategory || initialData.subcategory || '';
+      
       setFormData({
         name: initialData.name || '',
-        category: initialData.category || '',
-        subCategory: initialData.subCategory || initialData.subcategory || '',
+        category: categoryId,
+        subCategory: subCategoryId,
         description: initialData.description || '',
         street: initialData.address?.street || '',
         city: initialData.address?.city || '',

@@ -237,17 +237,9 @@ const handleViewBusiness = (subcategoryId) => {
               Actions
             </MenuButton>
             <MenuList>
-              <Link to={`/subcategory/details/${original._id}`}>
-                <MenuItem>
-                  <HiStatusOnline className="mr-2" /> View
-                </MenuItem>
-              </Link>
-              {/* <Link to={`/subcategory/edit/${original._id}`}> */}
               <MenuItem onClick={() => handleEditClick(original)}>
                 <MdEdit className="mr-2" /> Edit
               </MenuItem>
-              {/* </Link> */}
-              {/* <MenuItem onClick={openAlert}> */}
               <MenuItem
                 onClick={() => {
                   setSelectedId(original._id);
@@ -256,12 +248,9 @@ const handleViewBusiness = (subcategoryId) => {
               >
                 <MdDelete className="mr-2" /> Delete
               </MenuItem>
-
-              
-<MenuItem onClick={() => handleViewBusiness(original._id)}>
-        🏢 View Business
-      </MenuItem>
-
+              <MenuItem onClick={() => handleViewBusiness(original._id)}>
+                <HiStatusOnline className="mr-2" /> View Business
+              </MenuItem>
             </MenuList>
           </Menu>
         ),
