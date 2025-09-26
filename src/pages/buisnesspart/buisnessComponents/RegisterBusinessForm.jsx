@@ -21,6 +21,7 @@ const RegisterBusinessForm = ({
     email: '',
     facebook: '',
     instagram: '',
+    status: 'inactive', // Add status field with default value
   });
 
   const [subcategories, setSubcategories] = useState([]);
@@ -85,6 +86,7 @@ const RegisterBusinessForm = ({
         email: initialData.contact?.email || '',
         facebook: initialData.socialLinks?.facebook || '',
         instagram: initialData.socialLinks?.instagram || '',
+        status: initialData.status || 'inactive', // Add status field
       });
     }
   }, [initialData]);
@@ -122,11 +124,14 @@ const RegisterBusinessForm = ({
         facebook: formData.facebook,
         instagram: formData.instagram,
       },
+      // Add status field
+      status: formData.status,
       // Add owner field if userId is provided
       ...(userId && { owner: userId }),
     };
 
     try {
+      console.log("Form submission data:", submissionData);
       await onSubmit(submissionData);
       setResponseMsg('✅ Business added successfully!');
       if (!initialData) {
@@ -143,6 +148,7 @@ const RegisterBusinessForm = ({
           email: '',
           facebook: '',
           instagram: '',
+          status: 'active',
         });
       }
     } catch (error) {
@@ -207,6 +213,26 @@ const RegisterBusinessForm = ({
           ))}
         </select>
       </div>
+
+      {/* Status Dropdown - Only show in edit mode */}
+      {initialData && (
+        <div className="flex flex-col">
+          <label className="text-sm font-medium text-gray-700 mb-1">Status *</label>
+          <select
+            name="status"
+            value={formData.status}
+            onChange={handleChange}
+            required
+            className="px-4 py-2 rounded-xl border border-gray-300 bg-white shadow-sm"
+          >
+            
+            <option value="inactive">Pending</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+            <option value="suspended">Suspended</option>
+          </select>
+        </div>
+      )}
 
       {/* Description - Full Width */}
       <div className="md:col-span-2 flex flex-col">

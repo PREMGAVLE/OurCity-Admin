@@ -237,7 +237,11 @@ function UserManagement() {
       onSubmit={(businessData) => {
         const payload = { ...businessData, owner: selectedUserIdForBusiness };
         return axios.post("/bussiness/registerBuss", payload).then(() => {
-          toast({ title: "Business Registered", status: "success", duration: 3000 });
+          toast({ 
+            title: "Business request submitted and awaiting admin approval", 
+            status: "info", 
+            duration: 5000 
+          });
           setIsBusinessFormOpen(false);
           setUserBusinesses((prev) => ({
             ...prev,
