@@ -4,6 +4,9 @@ import { MdKeyboardArrowDown } from "react-icons/md";
 import { IoMdLogOut } from "react-icons/io";
 import { useUser } from "../../../hooks/use-user";
 import { IoSettings } from "react-icons/io5";
+import { IoMdNotifications } from "react-icons/io";
+import axios from "../../../axios";
+import NotificationModal from "../../../componant/NotificationModal/NotificationModal";
 import Logo from '../../../Images/Burhanpur_transparent.png'
 
 const NewNavbar = () => {
@@ -13,12 +16,73 @@ const NewNavbar = () => {
   const [pro, setPro] = useState("");
   const [openDropdown, setOpenDropdown] = useState(null);
   const [isMenuOpen2, setIsMenuOpen2] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  //  
+  // Fetch notifications for pending businesses
+  const fetchNotifications = async () => {
+    try {
+      // First try the notifications endpoint
+      const notificationsRes = await axios.get("/notifications");
+      if (notificationsRes.data && notificationsRes.status !== 404) {
+        const notificationsData = notificationsRes.data || [];
+        // Filter out businesses that have been processed (not in local storage)
+        const filteredNotifications = notificationsData.filter(notification => {
+          const businessId = notification.data?.businessId || notification._id;
+          const isStillPending = localStorage.getItem(`pending_business_${businessId}`) === 'true';
+          return isStillPending;
+        });
+        setNotifications(filteredNotifications);
+        setPendingCount(filteredNotifications.length);
+        return;
+      }
+    } catch (error) {
+      console.log("Notifications endpoint not available, fetching pending businesses directly");
+    }
+
+    try {
+      // Fallback: fetch pending businesses directly
+      const businessesRes = await axios.get("/bussiness/admin/all/");
+      if (businessesRes.data && businessesRes.status !== 404) {
+        const allBusinesses = businessesRes.data.data || [];
+        
+        // Filter businesses that are marked as pending in local storage
+        const pendingBusinesses = allBusinesses.filter(b => {
+          const isPending = localStorage.getItem(`pending_business_${b._id}`) === 'true';
+          return isPending;
+        });
+        
+        setNotifications(pendingBusinesses);
+        setPendingCount(pendingBusinesses.length);
+      }
+    } catch (error) {
+      console.error("Error fetching pending businesses:", error);
+      setNotifications([]);
+      setPendingCount(0);
+    }
+  };
+
   useEffect(() => {
     if (user) {
       setPro(user.profilePicUrl);
     }
+    fetchNotifications();
+    
+    // Listen for new business creation to update notifications
+    const handleNewBusiness = () => {
+      fetchNotifications();
+    };
+    
+    window.addEventListener('newBusinessCreated', handleNewBusiness);
+    
+    // Poll for notifications every 30 seconds
+    const interval = setInterval(fetchNotifications, 30000);
+    return () => {
+      window.removeEventListener('newBusinessCreated', handleNewBusiness);
+      clearInterval(interval);
+    };
   }, [user]);
 
   const toggleDropdown = (menu) => {
@@ -27,6 +91,60 @@ const NewNavbar = () => {
 
   const closeDropdown = () => {
     setOpenDropdown(null);
+  };
+
+  // Handle business approval
+  const handleApprove = async (businessId) => {
+    setLoading(true);
+    try {
+      await axios.put(`/bussiness/admin/approve/${businessId}`);
+      // Remove from local storage when approved
+      localStorage.removeItem(`pending_business_${businessId}`);
+      
+      // Immediately update notifications by removing the approved business
+      setNotifications(prev => prev.filter(n => {
+        // Check both _id and data.businessId fields
+        return n._id !== businessId && n.data?.businessId !== businessId;
+      }));
+      setPendingCount(prev => Math.max(0, prev - 1));
+      
+      // Don't call fetchNotifications() here as it will override our immediate updates
+      // Show success message
+      console.log("Business approved successfully");
+      // Notify other pages to refresh
+      window.dispatchEvent(new CustomEvent('businessStatusUpdated', { detail: { businessId, status: 'approved' } }));
+    } catch (error) {
+      console.error("Error approving business:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle business denial
+  const handleDeny = async (businessId) => {
+    setLoading(true);
+    try {
+      await axios.put(`/admin/reject/${businessId}`);
+      // Remove from local storage when rejected
+      localStorage.removeItem(`pending_business_${businessId}`);
+      
+      // Immediately update notifications by removing the rejected business
+      setNotifications(prev => prev.filter(n => {
+        // Check both _id and data.businessId fields
+        return n._id !== businessId && n.data?.businessId !== businessId;
+      }));
+      setPendingCount(prev => Math.max(0, prev - 1));
+      
+      // Don't call fetchNotifications() here as it will override our immediate updates
+      // Show success message
+      console.log("Business rejected successfully");
+      // Notify other pages to refresh
+      window.dispatchEvent(new CustomEvent('businessStatusUpdated', { detail: { businessId, status: 'denied' } }));
+    } catch (error) {
+      console.error("Error rejecting business:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -86,6 +204,21 @@ const NewNavbar = () => {
 
       {/* Avatar & Logout */}
       <div className="flex items-center gap-2">
+        {/* Notification Bell */}
+        {/* <div className="relative">
+          <button
+            onClick={() => setIsNotificationOpen(true)}
+            className="flex bg-purple-500 rounded-xl p-1 text-white text-xl font-bold focus:ring-2 focus:ring-bgBlue dark:focus:ring-bgBlue mr-2 relative"
+          >
+            <IoMdNotifications size={28} />
+            {pendingCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
+                {pendingCount}
+              </span>
+            )}
+          </button>
+        </div> */}
+
         <button
           onClick={() => setIsMenuOpen2(!isMenuOpen2)}
           className="flex  bg-purple-500 rounded-xl p-1 text-white text-xl font-bold focus:ring-2 focus:ring-bgBlue dark:focus:ring-bgBlue mr-4"
@@ -138,6 +271,16 @@ const NewNavbar = () => {
           </div>
         </div>
       </div>
+      
+      {/* Notification Modal */}
+      <NotificationModal
+        isOpen={isNotificationOpen}
+        onClose={() => setIsNotificationOpen(false)}
+        notifications={notifications}
+        onApprove={handleApprove}
+        onDeny={handleDeny}
+        loading={loading}
+      />
     </nav>
   );
 };

@@ -39,6 +39,9 @@ const UserBusinessList = () => {
   const [editingBusiness, setEditingBusiness] = useState(null);
   const [selectedBusinessID, setSelectedBusinessID] = useState(null);
   const [search, setSearch] = useState("");
+  const [showPendingBadge, setShowPendingBadge] = useState(false);
+  const [pendingBusinessId, setPendingBusinessId] = useState(null);
+  const [businessStatus, setBusinessStatus] = useState(null); // 'pending', 'approved', 'denied'
   const toast = useToast();
   const { isOpen, onOpen, onClose } = useDisclosure();
   const {
@@ -53,16 +56,107 @@ const UserBusinessList = () => {
     if (userId) {
       try {
         const res = await axios.get(`/bussiness/getBussById/${userId}`);
-        setBusinesses(res.data.result || []);
+        const allBusinesses = res.data.result || [];
+        
+        // Add pending status to businesses based on local storage
+        const businessesWithStatus = allBusinesses.map(business => {
+          const isPending = localStorage.getItem(`pending_business_${business._id}`) === 'true';
+          return {
+            ...business,
+            status: isPending ? 'pending' : (business.status || 'approved')
+          };
+        });
+        
+        // Check for any pending businesses in local storage
+        const pendingBusinesses = businessesWithStatus.filter(b => b.status === 'pending');
+        if (pendingBusinesses.length > 0) {
+          // Set the first pending business as the tracked one
+          const firstPending = pendingBusinesses[0];
+          setPendingBusinessId(firstPending._id);
+          setBusinessStatus('pending');
+          setShowPendingBadge(true);
+        } else {
+          // No pending businesses, reset state
+          setPendingBusinessId(null);
+          setBusinessStatus(null);
+          setShowPendingBadge(false);
+        }
+        
+        setBusinesses(businessesWithStatus);
       } catch (err) {
         console.error(err);
       }
     }
   };
 
+  // Check for pending businesses on component mount
+  useEffect(() => {
+    if (userId) {
+      // Check if there are any pending businesses in local storage for this user
+      const checkPendingBusinesses = async () => {
+        try {
+          // First fetch the user's businesses to get their IDs
+          const res = await axios.get(`/bussiness/getBussById/${userId}`);
+          const userBusinesses = res.data.result || [];
+          
+          // Clean up any old pending businesses that no longer exist
+          const allKeys = Object.keys(localStorage);
+          const pendingKeys = allKeys.filter(key => key.startsWith(`pending_business_`));
+          pendingKeys.forEach(key => {
+            const businessId = key.replace('pending_business_', '');
+            const businessExists = userBusinesses.some(b => b._id === businessId);
+            if (!businessExists) {
+              localStorage.removeItem(key);
+            }
+          });
+          
+          // Check if any of the user's businesses are marked as pending
+          const pendingBusiness = userBusinesses.find(business => {
+            return localStorage.getItem(`pending_business_${business._id}`) === 'true';
+          });
+          
+          if (pendingBusiness) {
+            setPendingBusinessId(pendingBusiness._id);
+            setBusinessStatus('pending');
+            setShowPendingBadge(true);
+          }
+        } catch (error) {
+          console.error("Error checking pending businesses:", error);
+        }
+      };
+      
+      checkPendingBusinesses();
+    }
+  }, [userId]);
+
   useEffect(() => {
     fetchBusinesses();
     axios.get("/category/getCategory").then((res) => setCategories(res.data.data || []));
+    
+    // Listen for admin actions to refresh the list
+    const handleStatusUpdate = (event) => {
+      const { businessId, status } = event.detail || {};
+      if (businessId === pendingBusinessId) {
+        setBusinessStatus(status);
+        if (status === 'approved' || status === 'denied') {
+          // Remove from local storage when approved/denied
+          localStorage.removeItem(`pending_business_${businessId}`);
+          setPendingBusinessId(null);
+          setShowPendingBadge(false);
+        }
+      }
+      fetchBusinesses();
+    };
+    
+    window.addEventListener('businessStatusUpdated', handleStatusUpdate);
+    
+    // Poll for status changes every 30 seconds
+    const interval = setInterval(fetchBusinesses, 30000);
+    
+    return () => {
+      window.removeEventListener('businessStatusUpdated', handleStatusUpdate);
+      clearInterval(interval);
+    };
   }, [userId]);
 
   // Handle Create & Update
@@ -72,11 +166,36 @@ const UserBusinessList = () => {
         await axios.put(`/bussiness/updateBuss/${editingBusiness._id}`, formData);
         toast({ title: "Business updated!", status: "success" });
       } else {
-        await axios.post("/bussiness/registerBuss", {
+        // Create business normally (backend doesn't support status field)
+        console.log("Creating business with data:", { ...formData, owner: userId });
+        const res = await axios.post("/bussiness/registerBuss", {
           ...formData,
           owner: userId,
         });
-        toast({ title: "Business added!", status: "success" });
+        
+        console.log("Business creation response:", res.data);
+        
+        // Store the business ID to track its status
+        const businessId = res?.data?.data?._id || res?.data?.result?._id || res?.data?._id;
+        if (businessId) {
+          // Mark as pending in local storage and state
+          localStorage.setItem(`pending_business_${businessId}`, 'true');
+          setPendingBusinessId(businessId);
+          setBusinessStatus('pending');
+        }
+        
+        toast({ 
+          title: "Your business request has been submitted and is awaiting admin approval. It will only be listed after approval.", 
+          status: "info", 
+          duration: 5000 
+        });
+        setShowPendingBadge(true);
+        
+        // Notify admin pages about new business creation
+        window.dispatchEvent(new CustomEvent('newBusinessCreated', { detail: { businessId } }));
+        
+        // Don't fetch businesses immediately - let admin approval handle visibility
+        return;
       }
       fetchBusinesses();
       setEditingBusiness(null);
@@ -122,6 +241,15 @@ const UserBusinessList = () => {
       Cell: ({ value }) => <Cell text={dayjs(value).format("D MMM, YYYY h:mm A")} />,
     },
     {
+      Header: "Status",
+      accessor: "status",
+      Cell: ({ value }) => {
+        const status = value || 'pending';
+        const color = status === 'approved' ? 'green' : status === 'denied' ? 'red' : 'orange';
+        return <span className={`px-2 py-1 rounded text-xs text-white bg-${color}-500`}>{status.toUpperCase()}</span>;
+      },
+    },
+    {
       Header: "Actions",
       Cell: ({ row: { original } }) => (
         <Menu>
@@ -145,11 +273,13 @@ const UserBusinessList = () => {
     },
   ], [businesses]);
 
-  // Filter businesses based on search
+  // Filter businesses based on search - only show approved/denied, hide pending
   const filteredBusinesses = useMemo(() => {
-    if (!search.trim()) return businesses;
+    // Only show approved and denied businesses, hide pending ones
+    const visibleBusinesses = businesses.filter(b => (b.status || 'pending') !== 'pending');
+    if (!search.trim()) return visibleBusinesses;
     
-    return businesses.filter((business) => {
+    return visibleBusinesses.filter((business) => {
       const searchTerm = search.toLowerCase();
       const businessName = (business.name || "").toLowerCase();
       const businessLocation = (business.location || "").toLowerCase();
@@ -173,12 +303,35 @@ const UserBusinessList = () => {
         <h1 className="text-2xl font-bold">User's Businesses</h1>
       </div>
 
+      {/* Rejection Message */}
+      {businessStatus === 'denied' && (
+        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <div className="flex items-center">
+            <span className="text-red-600 font-semibold">Your business request was rejected by the admin.</span>
+          </div>
+        </div>
+      )}
+
       {/* Summary Section */}
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center gap-4">
           <Button colorScheme="green" size="md">
-            Total Businesses: {businesses.length}
+            Total Businesses: {businesses.filter(b => (b.status || 'pending') !== 'pending').length}
           </Button>
+          {showPendingBadge && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold">Status:</span>
+              {businessStatus === 'pending' && (
+                <span className="bg-yellow-500 text-white px-2 py-1 rounded text-sm">Pending Approval</span>
+              )}
+              {businessStatus === 'approved' && (
+                <span className="bg-green-500 text-white px-2 py-1 rounded text-sm">Approved</span>
+              )}
+              {businessStatus === 'denied' && (
+                <span className="bg-red-500 text-white px-2 py-1 rounded text-sm">Rejected</span>
+              )}
+            </div>
+          )}
           <Button colorScheme="blue" onClick={() => { setEditingBusiness(null); onOpen(); }}>
             Add Business
           </Button>

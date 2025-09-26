@@ -51,6 +51,17 @@ const CategorySection = () => {
     try {
       const res = await axios.get("/category/getCategory");
       setCategories(res.data?.data || []);
+
+      console.log(res.data.data)
+
+      const managementCategories = categories.filter(
+  (cat) =>
+    Array.isArray(cat.type) &&
+    cat.type.some((t) => t.toLowerCase().includes("management"))
+);
+
+console.log("Management & Services Categories:", managementCategories);
+
     } catch (error) {
       console.error(
         "Error fetching categories:",

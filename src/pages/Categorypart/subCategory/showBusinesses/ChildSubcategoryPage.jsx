@@ -56,8 +56,16 @@ const ChildSubcategoryPage = () => {
     try {
       setLoading(true);
       const res = await axios.get(`/subcategory/getSubCategory/${subcategoryId}`);
-      setBusinesses(res?.data?.result?.businesses || []);
-      console.log(res);
+      const allBusinesses = res?.data?.result?.businesses || [];
+      
+      // Filter out pending businesses (those marked in local storage)
+      const approvedBusinesses = allBusinesses.filter(business => {
+        const isPending = localStorage.getItem(`pending_business_${business._id}`) === 'true';
+        return !isPending;
+      });
+      
+      setBusinesses(approvedBusinesses);
+      console.log("Filtered businesses:", approvedBusinesses);
     } catch (err) {
       console.error("Error fetching businesses", err);
     } finally {
@@ -94,10 +102,21 @@ const ChildSubcategoryPage = () => {
           toast({ title: "Update failed - API not available", status: "error", duration: 3000 });
         }
       } else {
-        // Add new business
+        // Add new business with pending status - no fallback allowed
         const response = await axios.post("/bussiness/registerBuss", formData);
+        
         if (response?.status !== 404) {
           toast({ title: "Business added successfully", status: "success", duration: 3000 });
+          
+          // Get the business ID from response
+          const businessId = response?.data?.data?._id || response?.data?.result?._id || response?.data?._id;
+          if (businessId) {
+            // Mark as pending in local storage
+            localStorage.setItem(`pending_business_${businessId}`, 'true');
+            // Notify admin pages about new business creation
+            window.dispatchEvent(new CustomEvent('newBusinessCreated', { detail: { businessId } }));
+          }
+          
           fetchBusiness();
           onClose();
           setEditingBusiness(null);
@@ -176,11 +195,17 @@ const ChildSubcategoryPage = () => {
     },
   ], []);
 
-  // Filter businesses based on search
+  // Filter businesses based on search and status (only show approved businesses)
   const filteredBusinesses = useMemo(() => {
-    if (!search.trim()) return businesses;
+    // First filter out pending businesses - only show approved/denied businesses
+    const approvedBusinesses = businesses.filter(business => {
+      const status = business.status || 'pending';
+      return status !== 'pending';
+    });
     
-    return businesses.filter((business) => {
+    if (!search.trim()) return approvedBusinesses;
+    
+    return approvedBusinesses.filter((business) => {
       const searchTerm = search.toLowerCase();
       const businessName = (business.name || "").toLowerCase();
       const businessLocation = (business.location || "").toLowerCase();

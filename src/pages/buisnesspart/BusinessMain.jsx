@@ -4,6 +4,7 @@ import dayjs from "dayjs";
 import Table from "../../componant/Table/Table";
 import { Button, useDisclosure, Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, useToast, AlertDialog, AlertDialogOverlay, AlertDialogContent, AlertDialogHeader, AlertDialogBody, AlertDialogFooter, Menu, MenuButton, MenuList, MenuItem, InputGroup, InputLeftElement, Input, InputRightAddon } from "@chakra-ui/react";
 import { MdDelete, MdSearch } from "react-icons/md";
+import { IoMdNotifications } from "react-icons/io";
 import RegisterBusinessForm from "./buisnessComponents/RegisterBusinessForm";
 import Cell from "../../componant/Table/cell";
 
@@ -16,6 +17,9 @@ const BusinessMain = () => {
     const [editingBusiness, setEditingBusiness] = useState(null);
     const [loading, setLoading] = useState(false);
     const [search, setSearch] = useState("");
+    const [notifications, setNotifications] = useState([]);
+    const [pendingCount, setPendingCount] = useState(0);
+    const [isNotificationOpen, setIsNotificationOpen] = useState(false);
 
     const { isOpen, onOpen, onClose } = useDisclosure(); // modal
     const {
@@ -27,11 +31,134 @@ const BusinessMain = () => {
     const cancelRef = useRef();
     const toast = useToast();
 
+    // Fetch pending notifications
+    const fetchNotifications = async () => {
+        try {
+            const notificationsRes = await axios.get("/notifications");
+            console.log("notificationsRes", notificationsRes);
+            if (notificationsRes.data && notificationsRes.status !== 404) {
+                const notificationsData = notificationsRes.data.result.notifications || notificationsRes.data || [];
+                // Filter out businesses that have been processed (not in local storage)
+                console.log("Raw notifications from API:", notificationsData);
+                const filteredNotifications = notificationsData.filter(notification => {
+                    const businessId = notification.data?.businessId || notification._id;
+                    const isStillPending = localStorage.getItem(`pending_business_${businessId}`) === 'true';
+                    console.log("Notification businessId:", businessId, "isStillPending:", isStillPending);
+                    return isStillPending;
+                });
+                console.log("Filtered notifications:", filteredNotifications);
+                setNotifications(Array.isArray(filteredNotifications) ? filteredNotifications : []);
+                setPendingCount(Array.isArray(filteredNotifications) ? filteredNotifications.length : 0);
+                return;
+            }
+        } catch (error) {
+            console.log("Notifications endpoint not available, fetching pending businesses directly");
+        }
+
+        try {
+            const businessesRes = await axios.get("/bussiness/admin/all");
+            if (businessesRes.data && businessesRes.status !== 404) {
+                const allBusinesses = businessesRes.data.data || [];
+                
+                // Filter businesses that are marked as pending in local storage
+                console.log("All businesses from API:", allBusinesses);
+                const pendingBusinesses = allBusinesses.filter(b => {
+                    const isPending = localStorage.getItem(`pending_business_${b._id}`) === 'true';
+                    console.log("Business ID:", b._id, "isPending:", isPending);
+                    return isPending;
+                });
+                console.log("Pending businesses:", pendingBusinesses);
+                
+                setNotifications(Array.isArray(pendingBusinesses) ? pendingBusinesses : []);
+                setPendingCount(Array.isArray(pendingBusinesses) ? pendingBusinesses.length : 0);
+            }
+        } catch (error) {
+            console.error("Error fetching pending businesses:", error);
+            setNotifications([]);
+            setPendingCount(0);
+        }
+    };
+
+    // Handle business approval
+    const handleApprove = async (businessId) => {
+        setLoading(true);
+        try {
+            await axios.put(`/admin/approve/${businessId}`);
+            // Remove from local storage when approved
+            localStorage.removeItem(`pending_business_${businessId}`);
+            
+            // Immediately update notifications by removing the approved business
+            console.log("Approving business ID:", businessId);
+            console.log("Current notifications before filter:", notifications);
+            setNotifications(prev => {
+                const filtered = prev.filter(n => {
+                    // Check both _id and data.businessId fields
+                    const shouldKeep = n._id !== businessId && n.data?.businessId !== businessId;
+                    console.log("Notification:", n._id, "data.businessId:", n.data?.businessId, "shouldKeep:", shouldKeep);
+                    return shouldKeep;
+                });
+                console.log("Filtered notifications:", filtered);
+                return filtered;
+            });
+            setPendingCount(prev => Math.max(0, prev - 1));
+            
+            // Don't call fetchNotifications() here as it will override our immediate updates
+            await fetchData();
+            toast({ title: "Business approved successfully", status: "success" });
+            window.dispatchEvent(new CustomEvent('businessStatusUpdated', { detail: { businessId, status: 'approved' } }));
+        } catch (error) {
+            console.error("Error approving business:", error);
+            toast({ title: "Error approving business", status: "error" });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Handle business denial
+    const handleDeny = async (businessId) => {
+        setLoading(true);
+        try {
+            await axios.put(`/admin/reject/${businessId}`);
+            // Remove from local storage when rejected
+            localStorage.removeItem(`pending_business_${businessId}`);
+            
+            // Immediately update notifications by removing the rejected business
+            setNotifications(prev => prev.filter(n => {
+                // Check both _id and data.businessId fields
+                return n._id !== businessId && n.data?.businessId !== businessId;
+            }));
+            setPendingCount(prev => Math.max(0, prev - 1));
+            
+            // Don't call fetchNotifications() here as it will override our immediate updates
+            await fetchData();
+            toast({ title: "Business rejected successfully", status: "success" });
+            window.dispatchEvent(new CustomEvent('businessStatusUpdated', { detail: { businessId, status: 'denied' } }));
+        } catch (error) {
+            console.error("Error rejecting business:", error);
+            toast({ title: "Error rejecting business", status: "error" });
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const fetchData = async () => {
         try {
-            const res = await axios.get("/bussiness/getBuss");
+            const res = await axios.get("/bussiness/admin/all");
+            console.log(res)
+            console.log("all bussiness res",res.data.data)
             if (res?.data && res.status !== 404) {
-                setData(res.data.result || []);
+                const allBusinesses = res.data.data || [];
+                
+                // Add pending status to businesses based on local storage
+                const businessesWithStatus = allBusinesses.map(business => {
+                    const isPending = localStorage.getItem(`pending_business_${business._id}`) === 'true';
+                    return {
+                        ...business,
+                        status: isPending ? 'pending' : (business.status || 'approved')
+                    };
+                });
+                
+                setData(businessesWithStatus);
             } else {
                 setData([]);
             }
@@ -43,6 +170,7 @@ const BusinessMain = () => {
 
     useEffect(() => {
         fetchData();
+        fetchNotifications();
         
         // Fetch users with proper error handling
         axios.get("/user/getUser")
@@ -71,6 +199,25 @@ const BusinessMain = () => {
                 console.error("Error fetching categories", err);
                 setCategories([]);
             });
+            
+        // Listen for admin actions to refresh the list
+        const handleStatusUpdate = () => {
+            fetchData();
+            // Don't call fetchNotifications() here as it will override immediate updates
+        };
+        
+        // Listen for new business creation to update notifications
+        const handleNewBusiness = () => {
+            fetchNotifications();
+        };
+        
+        window.addEventListener('businessStatusUpdated', handleStatusUpdate);
+        window.addEventListener('newBusinessCreated', handleNewBusiness);
+        
+        return () => {
+            window.removeEventListener('businessStatusUpdated', handleStatusUpdate);
+            window.removeEventListener('newBusinessCreated', handleNewBusiness);
+        };
     }, []);
 
 
@@ -103,9 +250,21 @@ const BusinessMain = () => {
                     toast({ title: "Update failed - API not available.", status: "error", duration: 3000 });
                 }
             } else {
+                // Create business with pending status - no fallback allowed
                 const response = await axios.post("bussiness/registerBuss", formData);
+                
                 if (response?.status !== 404) {
                     toast({ title: "Business added.", status: "success", duration: 3000 });
+                    
+                    // Get the business ID from response
+                    const businessId = response?.data?.data?._id || response?.data?.result?._id || response?.data?._id;
+                    if (businessId) {
+                        // Mark as pending in local storage
+                        localStorage.setItem(`pending_business_${businessId}`, 'true');
+                        // Notify admin pages about new business creation
+                        window.dispatchEvent(new CustomEvent('newBusinessCreated', { detail: { businessId } }));
+                    }
+                    
                     fetchData();
                     onClose();
                     setIsEditing(false);
@@ -215,7 +374,7 @@ const BusinessMain = () => {
             <section className="md:p-1">
                 <div className="flex justify-between items-center mb-6 flex-wrap gap-4">
                     <div className="flex gap-2 items-center">
-                        <Button colorScheme="purple">Total Businesses: {(data || []).length}</Button>
+                        <Button colorScheme="purple">Total Businesses: {(data || []).filter(b => (b.status || 'pending') !== 'pending').length}</Button>
                         <Button
                             colorScheme="blue"
                             onClick={() => {
@@ -229,7 +388,82 @@ const BusinessMain = () => {
                     </div>
 
 
-                    <div className="w-full mt-3 sm:w-auto sm:min-w-[300px]">
+                    <div className="w-full mt-3 sm:w-auto sm:min-w-[300px] flex items-center gap-2">
+                        {/* Notification Bell */}
+                        <div className="relative">
+                            <button
+                                onClick={() => setIsNotificationOpen(!isNotificationOpen)}
+                                className="flex bg-purple-500 rounded-xl p-1 text-white text-xl font-bold focus:ring-2 focus:ring-bgBlue dark:focus:ring-bgBlue mr-2 relative"
+                            >
+                                <IoMdNotifications size={28} />
+                                {pendingCount > 0 && (
+                                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
+                                        {pendingCount}
+                                    </span>
+                                )}
+                            </button>
+                            {/* Notification Dropdown */}
+                            {isNotificationOpen && (
+                                <div className="absolute right-0 mt-2 w-96 max-h-96 overflow-auto bg-white shadow-xl rounded-md border border-gray-200 z-50">
+                                    <div className="px-4 py-2 flex items-center justify-between border-b">
+                                        <span className="font-semibold text-sm">Pending Business Approvals</span>
+                                        <span className="text-xs bg-red-500 text-white rounded-full px-2 py-0.5">{Array.isArray(notifications) ? notifications.length : 0}</span>
+                                    </div>
+                                    {!Array.isArray(notifications) || notifications.length === 0 ? (
+                                        <div className="p-4 text-center text-gray-500 text-sm">No pending businesses</div>
+                                    ) : (
+                                        <div className="divide-y">
+                                             {notifications.map((n, idx) => {
+                                                 // Get business ID from different possible fields
+                                                 const businessId = n.data?.businessId || n._id;
+                                                 const businessName = n.business?.name || n.name || 'Unknown Business';
+                                                 const ownerName = n.data?.ownerId || n.owner || 'Unknown';
+                                                 const categoryName = typeof n.category === 'object' ? (n.category?.name || 'N/A') : (n.category || 'N/A');
+                                                 
+                                                 return (
+                                                <div key={n._id || idx} className="p-3">
+                                                    <div className="flex items-start justify-between gap-2">
+                                                        <div className="min-w-0">
+                                                                 <div className="font-semibold text-sm truncate">{businessName}</div>
+                                                                 <div className="text-xs text-gray-600 truncate">Owner: {ownerName}</div>
+                                                                 <div className="text-xs text-gray-600 truncate">Category: {categoryName}</div>
+                                                            {n.createdAt && (
+                                                                <div className="text-[11px] text-gray-400">{new Date(n.createdAt).toLocaleString()}</div>
+                                                            )}
+                                                            {n.description && (
+                                                                <div className="text-xs text-gray-500 mt-1 line-clamp-2">{n.description}</div>
+                                                            )}
+                                                        </div>
+                                                        <span className="text-[10px] bg-orange-100 text-orange-700 px-2 py-0.5 rounded">Pending</span>
+                                                    </div>
+                                                    <div className="flex justify-end gap-2 mt-2">
+                                                        <button
+                                                            disabled={loading}
+                                                                 onClick={() => handleApprove(businessId)}
+                                                            className="text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 text-xs px-3 py-1 rounded"
+                                                        >
+                                                            Approve
+                                                        </button>
+                                                        <button
+                                                            disabled={loading}
+                                                                 onClick={() => handleDeny(businessId)}
+                                                            className="text-red-600 border border-red-500 hover:bg-red-50 disabled:opacity-60 text-xs px-3 py-1 rounded"
+                                                        >
+                                                            Deny
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                 );
+                                             })}
+                                        </div>
+                                    )}
+                                    <div className="p-2 text-right">
+                                        <button onClick={() => setIsNotificationOpen(false)} className="text-xs text-purple-600 hover:underline">Close</button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        
                         <InputGroup size="md">
                             <InputLeftElement pointerEvents="none">
                                 <MdSearch color="gray.400" />
@@ -264,6 +498,8 @@ const BusinessMain = () => {
                 
                     data={(data || []).filter((item) => {
                         if (!item) return false;
+                        // Only show approved/denied businesses, hide pending ones
+                        if ((item.status || 'pending') === 'pending') return false;
                         const ownerName = getOwnerName(item.owner).toLowerCase();
                         const categoryName = getCategoryName(item.category).toLowerCase();
                         return (
