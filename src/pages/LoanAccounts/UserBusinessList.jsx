@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef } from "react";
+import React, { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import axios from "../../axios";
 import dayjs from "dayjs";
@@ -42,6 +42,8 @@ const UserBusinessList = () => {
   const [showPendingBadge, setShowPendingBadge] = useState(false);
   const [pendingBusinessId, setPendingBusinessId] = useState(null);
   const [businessStatus, setBusinessStatus] = useState(null); // 'pending', 'approved', 'denied'
+  const [lastRefreshTime, setLastRefreshTime] = useState(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const toast = useToast();
   const { isOpen, onOpen, onClose } = useDisclosure();
   const {
@@ -50,11 +52,39 @@ const UserBusinessList = () => {
     onClose: closeAlert,
   } = useDisclosure();
   const cancelRef = useRef();
+  const refreshTimeoutRef = useRef(null);
 
-  // Fetch businesses & categories
-  const fetchBusinesses = async () => {
-    if (userId) {
+  // Debounced refresh function to prevent excessive API calls
+  const debouncedRefresh = useCallback((delay = 1000) => {
+    if (refreshTimeoutRef.current) {
+      clearTimeout(refreshTimeoutRef.current);
+    }
+    
+    refreshTimeoutRef.current = setTimeout(() => {
+      console.log('Debounced refresh triggered');
+      fetchBusinesses(true);
+    }, delay);
+  }, []);
+
+  // Fetch businesses & categories with optimized caching
+  const fetchBusinesses = async (forceRefresh = false) => {
+    if (userId && !isRefreshing) {
       try {
+        setIsRefreshing(true);
+        console.log('Fetching businesses for user:', userId, 'Force refresh:', forceRefresh);
+        
+        // Check if we need to refresh based on time since last refresh
+        const now = new Date();
+        const timeSinceLastRefresh = lastRefreshTime ? 
+          (now.getTime() - new Date(lastRefreshTime).getTime()) / 1000 : Infinity;
+        
+        // Only skip API call if not forcing refresh and recent data exists
+        if (!forceRefresh && timeSinceLastRefresh < 5) {
+          console.log('Skipping API call - recent data available');
+          setIsRefreshing(false);
+          return;
+        }
+        
         const res = await axios.get(`/bussiness/getBussById/${userId}`);
         const allBusinesses = res.data.result || [];
         
@@ -83,8 +113,12 @@ const UserBusinessList = () => {
         }
         
         setBusinesses(businessesWithStatus);
+        setLastRefreshTime(new Date().toISOString());
+        console.log('Businesses updated:', businessesWithStatus.length, 'total businesses');
       } catch (err) {
-        console.error(err);
+        console.error('Error fetching businesses:', err);
+      } finally {
+        setIsRefreshing(false);
       }
     }
   };
@@ -126,6 +160,18 @@ const UserBusinessList = () => {
       };
       
       checkPendingBusinesses();
+      
+      // Add immediate refresh on page focus to catch any missed updates
+      const handleFocus = () => {
+        console.log('Page focused, refreshing businesses...');
+        debouncedRefresh(200); // Very short delay for focus events
+      };
+      
+      window.addEventListener('focus', handleFocus);
+      
+      return () => {
+        window.removeEventListener('focus', handleFocus);
+      };
     }
   }, [userId]);
 
@@ -133,9 +179,11 @@ const UserBusinessList = () => {
     fetchBusinesses();
     axios.get("/category/getCategory").then((res) => setCategories(res.data.data || []));
     
-    // Listen for admin actions to refresh the list
+    // Listen for admin actions to refresh the list immediately
     const handleStatusUpdate = (event) => {
-      const { businessId, status } = event.detail || {};
+      const { businessId, status, timestamp, action } = event.detail || {};
+      console.log('Business status update received:', { businessId, status, pendingBusinessId, timestamp, action });
+      
       if (businessId === pendingBusinessId) {
         setBusinessStatus(status);
         if (status === 'approved' || status === 'denied') {
@@ -145,19 +193,29 @@ const UserBusinessList = () => {
           setShowPendingBadge(false);
         }
       }
-      fetchBusinesses();
+      
+      // Use debounced refresh for immediate updates without overwhelming the API
+      if (action === 'approve' || action === 'reject') {
+        console.log('Immediate refresh triggered for business action:', action);
+        debouncedRefresh(500); // Shorter delay for immediate actions
+      } else {
+        debouncedRefresh(1000); // Standard delay for other updates
+      }
     };
     
     window.addEventListener('businessStatusUpdated', handleStatusUpdate);
     
-    // Poll for status changes every 30 seconds
-    const interval = setInterval(fetchBusinesses, 30000);
+    // Reduced polling frequency from 30 seconds to 10 seconds for better responsiveness
+    const interval = setInterval(fetchBusinesses, 10000);
     
     return () => {
       window.removeEventListener('businessStatusUpdated', handleStatusUpdate);
       clearInterval(interval);
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current);
+      }
     };
-  }, [userId]);
+  }, [userId, pendingBusinessId]);
 
   // Handle Create & Update
   const handleFormSubmit = async (formData) => {
