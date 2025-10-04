@@ -21,21 +21,19 @@ const NewNavbar = () => {
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Fetch notifications for pending businesses
+  // Fetch notifications for pending businesses from API (no localStorage dependency)
   const fetchNotifications = async () => {
     try {
       // First try the notifications endpoint
-      const notificationsRes = await axios.get("/notifications");
+      const notificationsRes = await axios.get("/api/notifications");
+      console.log("Notifications API response:", notificationsRes);
       if (notificationsRes.data && notificationsRes.status !== 404) {
-        const notificationsData = notificationsRes.data || [];
-        // Filter out businesses that have been processed (not in local storage)
-        const filteredNotifications = notificationsData.filter(notification => {
-          const businessId = notification.data?.businessId || notification._id;
-          const isStillPending = localStorage.getItem(`pending_business_${businessId}`) === 'true';
-          return isStillPending;
-        });
-        setNotifications(filteredNotifications);
-        setPendingCount(filteredNotifications.length);
+        const notificationsData = notificationsRes.data.result?.notifications || notificationsRes.data || [];
+        // console.log("Raw notifications from API:", notificationsData);
+        
+        // Show all pending notifications from API (no localStorage filtering)
+        setNotifications(Array.isArray(notificationsData) ? notificationsData : []);
+        setPendingCount(Array.isArray(notificationsData) ? notificationsData.length : 0);
         return;
       }
     } catch (error) {
@@ -43,19 +41,34 @@ const NewNavbar = () => {
     }
 
     try {
-      // Fallback: fetch pending businesses directly
-      const businessesRes = await axios.get("/bussiness/admin/all/");
+      // Fallback: fetch pending businesses directly and filter by approvalStatus
+      const businessesRes = await axios.get("/bussiness/admin/all");
+      console.log("Businesses API response for notifications:", businessesRes);
       if (businessesRes.data && businessesRes.status !== 404) {
-        const allBusinesses = businessesRes.data.data || [];
+        const allBusinesses = businessesRes.data.data || businessesRes.data || [];
         
-        // Filter businesses that are marked as pending in local storage
+        // Only show businesses that are explicitly pending (approvalStatus: "pending")
+        // AND are truly new businesses (not existing ones)
+        // Use a timestamp approach to distinguish new vs existing businesses
+        const currentTime = new Date();
+        const oneDayAgo = new Date(currentTime.getTime() - (24 * 60 * 60 * 1000)); // 24 hours ago
+        
         const pendingBusinesses = allBusinesses.filter(b => {
-          const isPending = localStorage.getItem(`pending_business_${b._id}`) === 'true';
-          return isPending;
+          const approvalStatus = b.approvalStatus;
+          const createdAt = new Date(b.createdAt || b.created_at || b.dateCreated || 0);
+          
+          // console.log(`Navbar notification check - Business: ${b.name}, approvalStatus: ${approvalStatus}, createdAt: ${createdAt}`);
+          
+          // Only show if:
+          // 1. Explicitly pending (approvalStatus: "pending")
+          // 2. Created within the last 24 hours (truly new)
+          return (approvalStatus === "pending" || approvalStatus === "Pending") && 
+                 createdAt > oneDayAgo;
         });
         
-        setNotifications(pendingBusinesses);
-        setPendingCount(pendingBusinesses.length);
+        console.log("Pending businesses for notifications:", pendingBusinesses);
+        setNotifications(Array.isArray(pendingBusinesses) ? pendingBusinesses : []);
+        setPendingCount(Array.isArray(pendingBusinesses) ? pendingBusinesses.length : 0);
       }
     } catch (error) {
       console.error("Error fetching pending businesses:", error);
@@ -68,19 +81,33 @@ const NewNavbar = () => {
     if (user) {
       setPro(user.profilePicUrl);
     }
+    console.log("NewNavbar useEffect - Fetching notifications...");
     fetchNotifications();
     
     // Listen for new business creation to update notifications
     const handleNewBusiness = () => {
+      console.log("New business created, refreshing notifications...");
+      fetchNotifications();
+    };
+    
+    // Listen for business status updates
+    const handleStatusUpdate = () => {
+      console.log("Business status updated, refreshing notifications...");
       fetchNotifications();
     };
     
     window.addEventListener('newBusinessCreated', handleNewBusiness);
+    window.addEventListener('businessStatusUpdated', handleStatusUpdate);
     
-    // Poll for notifications every 30 seconds
-    const interval = setInterval(fetchNotifications, 30000);
+    // Poll for notifications every 30 seconds for real-time updates
+    const interval = setInterval(() => {
+      console.log("Polling for notifications...");
+      fetchNotifications();
+    }, 30000);
+    
     return () => {
       window.removeEventListener('newBusinessCreated', handleNewBusiness);
+      window.removeEventListener('businessStatusUpdated', handleStatusUpdate);
       clearInterval(interval);
     };
   }, [user]);
@@ -97,24 +124,43 @@ const NewNavbar = () => {
   const handleApprove = async (businessId) => {
     setLoading(true);
     try {
-      await axios.put(`/bussiness/admin/approve/${businessId}`);
-      // Remove from local storage when approved
-      localStorage.removeItem(`pending_business_${businessId}`);
+      console.log("Approving business ID:", businessId);
+      const response = await axios.post(`/api/admin/approve/${businessId}`);
+      console.log("Navbar approval API response:", response);
       
-      // Immediately update notifications by removing the approved business
-      setNotifications(prev => prev.filter(n => {
-        // Check both _id and data.businessId fields
-        return n._id !== businessId && n.data?.businessId !== businessId;
-      }));
-      setPendingCount(prev => Math.max(0, prev - 1));
-      
-      // Don't call fetchNotifications() here as it will override our immediate updates
-      // Show success message
-      console.log("Business approved successfully");
-      // Notify other pages to refresh
-      window.dispatchEvent(new CustomEvent('businessStatusUpdated', { detail: { businessId, status: 'approved' } }));
+      // Only proceed if API call is successful
+      if (response.status === 200 || response.status === 201) {
+        // Immediately update notifications by removing the approved business
+        setNotifications(prev => {
+          const filtered = prev.filter(n => {
+            // Check both _id and data.businessId fields
+            const shouldKeep = n._id !== businessId && n.data?.businessId !== businessId;
+            console.log(`Navbar notification filter - ID: ${n._id}, businessId: ${businessId}, shouldKeep: ${shouldKeep}`);
+            return shouldKeep;
+          });
+          console.log("Navbar filtered notifications after approval:", filtered);
+          return filtered;
+        });
+        setPendingCount(prev => {
+          const newCount = Math.max(0, prev - 1);
+          console.log(`Navbar pending count updated: ${prev} -> ${newCount}`);
+          return newCount;
+        });
+        
+        // Refresh notifications from API
+        await fetchNotifications();
+        // Show success message
+        console.log("Business approved successfully");
+        // Notify other pages to refresh
+        window.dispatchEvent(new CustomEvent('businessStatusUpdated', { detail: { businessId, status: 'approved' } }));
+      } else {
+        throw new Error(`API returned status: ${response.status}`);
+      }
     } catch (error) {
       console.error("Error approving business:", error);
+      if (error.response?.status === 404) {
+        console.error("Approval endpoint not found. Please check API configuration.");
+      }
     } finally {
       setLoading(false);
     }
@@ -124,24 +170,43 @@ const NewNavbar = () => {
   const handleDeny = async (businessId) => {
     setLoading(true);
     try {
-      await axios.put(`/admin/reject/${businessId}`);
-      // Remove from local storage when rejected
-      localStorage.removeItem(`pending_business_${businessId}`);
+      console.log("Rejecting business ID:", businessId);
+      const response = await axios.post(`/api/admin/reject/${businessId}`);
+      console.log("Navbar rejection API response:", response);
       
-      // Immediately update notifications by removing the rejected business
-      setNotifications(prev => prev.filter(n => {
-        // Check both _id and data.businessId fields
-        return n._id !== businessId && n.data?.businessId !== businessId;
-      }));
-      setPendingCount(prev => Math.max(0, prev - 1));
-      
-      // Don't call fetchNotifications() here as it will override our immediate updates
-      // Show success message
-      console.log("Business rejected successfully");
-      // Notify other pages to refresh
-      window.dispatchEvent(new CustomEvent('businessStatusUpdated', { detail: { businessId, status: 'denied' } }));
+      // Only proceed if API call is successful
+      if (response.status === 200 || response.status === 201) {
+        // Immediately update notifications by removing the rejected business
+        setNotifications(prev => {
+          const filtered = prev.filter(n => {
+            // Check both _id and data.businessId fields
+            const shouldKeep = n._id !== businessId && n.data?.businessId !== businessId;
+            console.log(`Navbar notification filter - ID: ${n._id}, businessId: ${businessId}, shouldKeep: ${shouldKeep}`);
+            return shouldKeep;
+          });
+          console.log("Navbar filtered notifications after rejection:", filtered);
+          return filtered;
+        });
+        setPendingCount(prev => {
+          const newCount = Math.max(0, prev - 1);
+          console.log(`Navbar pending count updated: ${prev} -> ${newCount}`);
+          return newCount;
+        });
+        
+        // Refresh notifications from API
+        await fetchNotifications();
+        // Show success message
+        console.log("Business rejected successfully");
+        // Notify other pages to refresh
+        window.dispatchEvent(new CustomEvent('businessStatusUpdated', { detail: { businessId, status: 'denied' } }));
+      } else {
+        throw new Error(`API returned status: ${response.status}`);
+      }
     } catch (error) {
       console.error("Error rejecting business:", error);
+      if (error.response?.status === 404) {
+        console.error("Rejection endpoint not found. Please check API configuration.");
+      }
     } finally {
       setLoading(false);
     }

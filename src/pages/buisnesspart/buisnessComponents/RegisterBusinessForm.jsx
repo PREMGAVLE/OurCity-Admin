@@ -22,6 +22,7 @@ const RegisterBusinessForm = ({
     facebook: '',
     instagram: '',
     status: 'inactive', // Add status field with default value
+    approvalStatus: 'pending', // Add approvalStatus field
   });
 
   const [subcategories, setSubcategories] = useState([]);
@@ -87,6 +88,7 @@ const RegisterBusinessForm = ({
         facebook: initialData.socialLinks?.facebook || '',
         instagram: initialData.socialLinks?.instagram || '',
         status: initialData.status || 'inactive', // Add status field
+        approvalStatus: initialData.approvalStatus || 'pending', // Add approvalStatus field
       });
     }
   }, [initialData]);
@@ -126,6 +128,8 @@ const RegisterBusinessForm = ({
       },
       // Add status field
       status: formData.status,
+      // Add approvalStatus field
+      approvalStatus: formData.approvalStatus,
       // Add owner field if userId is provided
       ...(userId && { owner: userId }),
     };
@@ -148,7 +152,8 @@ const RegisterBusinessForm = ({
           email: '',
           facebook: '',
           instagram: '',
-          status: 'active',
+          status: 'inactive',
+          approvalStatus: 'pending',
         });
       }
     } catch (error) {
@@ -226,10 +231,27 @@ const RegisterBusinessForm = ({
             className="px-4 py-2 rounded-xl border border-gray-300 bg-white shadow-sm"
           >
             
-            <option value="inactive">Pending</option>
+            <option value="inactive">Inactive</option>
+            <option value="active">Active</option>
+            <option value="blocked">Blocked</option>
+          </select>
+        </div>
+      )}
+
+      {/* Approval Status Dropdown - Only show in edit mode */}
+      {initialData && (
+        <div className="flex flex-col">
+          <label className="text-sm font-medium text-gray-700 mb-1">Approval Status *</label>
+          <select
+            name="approvalStatus"
+            value={formData.approvalStatus}
+            onChange={handleChange}
+            required
+            className="px-4 py-2 rounded-xl border border-gray-300 bg-white shadow-sm"
+          >
+            <option value="pending">Pending</option>
             <option value="approved">Approved</option>
             <option value="rejected">Rejected</option>
-            <option value="suspended">Suspended</option>
           </select>
         </div>
       )}
