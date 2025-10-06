@@ -18,7 +18,10 @@ const NewLogin = () => {
       const response = await axios.post("/Users/login", { phone, password });
        
       localStorage.setItem("token", response.data.result.token);
-      console.log(response)
+      // Store user data in localStorage for immediate access
+      localStorage.setItem("userData", JSON.stringify(response.data.result.user));
+      console.log("Login response:", response);
+      console.log("Stored user data:", response.data.result.user);
       if (response.data) {
         window.location.replace("/dash");
       }

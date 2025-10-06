@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { MdKeyboardArrowDown } from "react-icons/md";
 import { IoMdLogOut } from "react-icons/io";
 import { useUser } from "../../../hooks/use-user";
+import { useAuth } from "../../../componant/authentication/authentication";
 import { IoSettings } from "react-icons/io5";
 import { IoMdNotifications } from "react-icons/io";
 import axios from "../../../axios";
@@ -10,9 +10,20 @@ import NotificationModal from "../../../componant/NotificationModal/Notification
 import Logo from '../../../Images/Burhanpur_transparent.png'
 
 const NewNavbar = () => {
-  const { data: user } = useUser();
+  const { data: user, isLoading: userLoading, error: userError } = useUser();
+  const authUser = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  
+  // Try to get user data from multiple sources
+  const currentUser = user || authUser || JSON.parse(localStorage.getItem('userData') || 'null');
+  
+  // Debug: Log user data to see what's being returned
+  console.log("User data from useUser hook:", user);
+  console.log("Auth user data:", authUser);
+  console.log("Current user (final):", currentUser);
+  console.log("User loading state:", userLoading);
+  console.log("User error:", userError);
   const [pro, setPro] = useState("");
   const [openDropdown, setOpenDropdown] = useState(null);
   const [isMenuOpen2, setIsMenuOpen2] = useState(false);
@@ -111,6 +122,7 @@ const NewNavbar = () => {
       clearInterval(interval);
     };
   }, [user]);
+
 
   const toggleDropdown = (menu) => {
     setOpenDropdown((prev) => (prev === menu ? null : menu));
@@ -260,6 +272,12 @@ const NewNavbar = () => {
 
           </Link>
         </li>
+        <li>
+          <Link to="/dash/products" className="hover:text-purple">
+            Products
+
+          </Link>
+        </li>
 
 
 
@@ -269,26 +287,29 @@ const NewNavbar = () => {
 
       {/* Avatar & Logout */}
       <div className="flex items-center gap-2">
-        {/* Notification Bell */}
-        {/* <div className="relative">
-          <button
-            onClick={() => setIsNotificationOpen(true)}
-            className="flex bg-purple-500 rounded-xl p-1 text-white text-xl font-bold focus:ring-2 focus:ring-bgBlue dark:focus:ring-bgBlue mr-2 relative"
-          >
-            <IoMdNotifications size={28} />
-            {pendingCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
-                {pendingCount}
-              </span>
-            )}
-          </button>
-        </div> */}
+        {/* Admin User Display */}
+        <div className="flex items-center gap-2 sm:gap-3 bg-gradient-to-r from-purple-500 to-purple-600 rounded-xl px-3 sm:px-4 py-2 text-white">
+          {/* Admin Avatar */}
+          <div className="w-8 h-8 rounded-full bg-white bg-opacity-20 flex items-center justify-center text-white font-bold text-sm">
+            {currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'A'}
+          </div>
+          
+          {/* Admin Username */}
+          <div className="flex flex-col items-start">
+            <span className="text-sm font-bold text-white">
+              {userLoading ? 'Loading...' : (currentUser?.name || 'Admin')}
+            </span>
+            <span className="text-xs text-purple-100 opacity-80">
+              Administrator
+            </span>
+          </div>
+        </div>
 
+        {/* Settings Button */}
         <button
           onClick={() => setIsMenuOpen2(!isMenuOpen2)}
-          className="flex  bg-purple-500 rounded-xl p-1 text-white text-xl font-bold focus:ring-2 focus:ring-bgBlue dark:focus:ring-bgBlue mr-4"
+          className="flex bg-purple-500 rounded-xl p-1 text-white text-xl font-bold focus:ring-2 focus:ring-bgBlue dark:focus:ring-bgBlue mr-4 hover:bg-purple-600 transition-colors"
         >
-
           <IoSettings size={28} />
         </button>
       </div>
@@ -317,14 +338,14 @@ const NewNavbar = () => {
             </div>
 
             <div>
-              <h1 className="text-sm font-bold">{user?.name}</h1>
-              <p className="text-sm">{user?.email}</p>
+              <h1 className="text-sm font-bold">{currentUser?.name || 'Admin'}</h1>
+              <p className="text-sm">{currentUser?.email || 'admin@example.com'}</p>
             </div>
           </div>
           <div className="w-full flex gap-4 justify-between items-center p-2 text-purple-500 font-oswald">
             <div className="ml-4">
               <p className="text-sm text-green font-semibold">Active Course</p>
-              <h1 className="font-bold text-purple-500">{user?.planName}</h1>
+              <h1 className="font-bold text-purple-500">{currentUser?.planName || 'Admin Plan'}</h1>
             </div>
 
             <div className="mr-4 text-purple-500">
