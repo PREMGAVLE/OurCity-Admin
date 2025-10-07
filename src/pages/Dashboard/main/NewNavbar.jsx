@@ -36,7 +36,7 @@ const NewNavbar = () => {
   const fetchNotifications = async () => {
     try {
       // First try the notifications endpoint
-      const notificationsRes = await axios.get("/api/notifications");
+      const notificationsRes = await axios.get("/notifications");
       console.log("Notifications API response:", notificationsRes);
       if (notificationsRes.data && notificationsRes.status !== 404) {
         const notificationsData = notificationsRes.data.result?.notifications || notificationsRes.data || [];
