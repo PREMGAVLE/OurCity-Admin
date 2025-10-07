@@ -14,8 +14,13 @@ const Signin = () => {
     .post("/adminLogin", { email, password })
     .then((response) => {
 
-      console.log(response)
+      console.log("Login response:", response)
       localStorage.setItem("token", response.data.accessToken);
+      // Store user data in localStorage for immediate access
+      if (response.data.user) {
+        localStorage.setItem("userData", JSON.stringify(response.data.user));
+        console.log("Stored user data:", response.data.user);
+      }
       
       // toast.success("Login successfull");
    if( response.data){

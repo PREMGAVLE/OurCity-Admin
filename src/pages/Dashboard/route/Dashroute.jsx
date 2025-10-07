@@ -29,6 +29,7 @@ import Carousel from "../../OfficerData/Corouasol";
 import CategorySection from "../../Categorypart/CategorySection";
 // import Buisness from "../../buisnesspart/buisness";
 import BusinessMain from "../../buisnesspart/BusinessMain";
+import ProductsMain from "../../Products/ProductsMain";
 import Plans from "../../plans/Plans";
 import UserBusinessList from "../../LoanAccounts/UserBusinessList";
 import AdsMain from "../../Adspart/AdsMain";
@@ -79,6 +80,7 @@ const DashRoute = () => {
         />
         <Route path="/category" element={<CategorySection />} />
         <Route path="/buisness" element={<BusinessMain />} />
+        <Route path="/products" element={<ProductsMain />} />
         <Route path="/plains" element={<Plans />} />
         <Route path="/userbus/:userId" element={<UserBusinessList />} />
         <Route path="/ads" element={<AdsMain />} />

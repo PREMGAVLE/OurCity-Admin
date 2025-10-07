@@ -17,6 +17,7 @@ import { GoDotFill } from "react-icons/go";
 import { FaUsers } from "react-icons/fa";
 import { FaBookOpenReader } from "react-icons/fa6";
 import { GiTakeMyMoney } from "react-icons/gi";
+import { FaBox } from "react-icons/fa";
 const Sidebar = () => {
   const { data: user } = useUser();
   const navigate = useNavigate();
