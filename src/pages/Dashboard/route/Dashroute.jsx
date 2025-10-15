@@ -32,9 +32,12 @@ import BusinessMain from "../../buisnesspart/BusinessMain";
 import ProductsMain from "../../Products/ProductsMain";
 import Plans from "../../plans/Plans";
 import UserBusinessList from "../../LoanAccounts/UserBusinessList";
+import BusinessLeads from "../../LoanAccounts/BusinessLeads";
+import BusinessBookings from "../../LoanAccounts/BusinessBookings";
 import AdsMain from "../../Adspart/AdsMain";
 import SubcategoryPage from "../../Categorypart/subCategory/SubCategory";
 import ChildSubcategoryPage from "../../Categorypart/subCategory/showBusinesses/ChildSubcategoryPage";
+import ViewProducts from "../../LoanAccounts/ViewProducts";
 
 // import CreateLoanUser from "../../LoanAccounts/CreateLoanUser";
 const DashRoute = () => {
@@ -83,6 +86,9 @@ const DashRoute = () => {
         <Route path="/products" element={<ProductsMain />} />
         <Route path="/plains" element={<Plans />} />
         <Route path="/userbus/:userId" element={<UserBusinessList />} />
+        <Route path="/business-leads/:businessId" element={<BusinessLeads />} />
+        <Route path="/business-bookings/:businessId" element={<BusinessBookings />} />
+        <Route path="/admin/view-products/:businessId" element={<ViewProducts />} />
         <Route path="/ads" element={<AdsMain />} />
 
         {/* <Route path="/create- " element={<CreateLoanUser/>} /> */}

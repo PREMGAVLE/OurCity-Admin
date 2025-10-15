@@ -42,9 +42,9 @@ const BusinessMain = () => {
     // Fetch pending notifications from API (no localStorage dependency)
     const fetchNotifications = async () => {
         try {
-            console.log("Fetching notifications from /api/notifications");
+           
             const notificationsRes = await axios.get("/api/notifications");
-            console.log("Notifications API response:", notificationsRes);
+            
             
             if (notificationsRes.data && notificationsRes.status !== 404) {
                 const notificationsData = notificationsRes.data.result?.notifications || notificationsRes.data || [];
@@ -590,7 +590,7 @@ const BusinessMain = () => {
 
                 <Table
                 
-                    data={(data || []).filter((item) => {
+                    data={[...(data || [])].reverse().filter((item) => {
                         if (!item) return false;
                         // Data is already filtered to approved businesses in fetchData
                         const ownerName = getOwnerName(item.owner).toLowerCase();

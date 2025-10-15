@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import axios from "../../axios";
 import Table from "../../componant/Table/Table";
-import { Button, useDisclosure, Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, useToast, Menu, MenuButton, MenuList, MenuItem, InputGroup, InputLeftElement, Input, InputRightAddon } from "@chakra-ui/react";
+import { Button, useDisclosure, Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, useToast, Menu, MenuButton, MenuList, MenuItem, InputGroup, InputLeftElement, Input, InputRightAddon, AlertDialog, AlertDialogOverlay, AlertDialogContent, AlertDialogHeader, AlertDialogBody, AlertDialogFooter, FormControl, FormLabel, Select, Textarea } from "@chakra-ui/react";
 import { MdDelete, MdSearch } from "react-icons/md";
 import { IoMdNotifications } from "react-icons/io";
 import Cell from "../../componant/Table/cell";
@@ -18,6 +18,22 @@ const ProductsMain = () => {
     const [isRejectionModalOpen, setIsRejectionModalOpen] = useState(false);
     const [rejectionReason, setRejectionReason] = useState("");
     const [productToReject, setProductToReject] = useState(null);
+    
+    // Edit and Delete states
+    const [isEditing, setIsEditing] = useState(false);
+    const [editingProduct, setEditingProduct] = useState(null);
+    const [selectedProductID, setSelectedProductID] = useState(null);
+    const [editFormData, setEditFormData] = useState({
+        name: "",
+        description: "",
+        price: "",
+        offerPrice: "",
+        brand: "",
+        quantity: "",
+        feature: "",
+        speciality: "",
+        status: "active"
+    });
 
     const { isOpen, onOpen, onClose } = useDisclosure(); // modal
     const {
@@ -25,7 +41,13 @@ const ProductsMain = () => {
         onOpen: openRejection,
         onClose: closeRejection,
     } = useDisclosure(); // rejection modal
+    const {
+        isOpen: isAlertOpen,
+        onOpen: openAlert,
+        onClose: closeAlert,
+    } = useDisclosure(); // delete alert
     const toast = useToast();
+    const cancelRef = useRef();
 
     // Fetch products data - only approved products
     const fetchData = async () => {
@@ -94,14 +116,16 @@ const ProductsMain = () => {
                 
                 // Filter for product notifications
                 const productNotifications = Array.isArray(notificationsData) ? 
-                    notificationsData.filter(n => n.type === 'product' || n.data?.type === 'product') : [];
+                    notificationsData.filter(n => n.type === 'product_submission' || n.type === 'product' || n.data?.type === 'product') : [];
                 
                 // Filter out orphaned products from API notifications as well
                 const validProductNotifications = await filterOrphanedProducts(productNotifications);
                 console.log("Valid product notifications after filtering orphaned ones:", validProductNotifications);
                 
-                setNotifications(validProductNotifications);
-                setPendingCount(validProductNotifications.length);
+                // Temporarily bypass orphaned product filtering to test
+                console.log("Raw product notifications (before orphaned filtering):", productNotifications);
+                setNotifications(productNotifications);
+                setPendingCount(productNotifications.length);
                 return;
             }
         } catch (error) {
@@ -125,8 +149,10 @@ const ProductsMain = () => {
                 const validProducts = await filterOrphanedProducts(pendingProducts);
                 console.log("Valid products after filtering orphaned ones:", validProducts);
                 
-                setNotifications(validProducts);
-                setPendingCount(validProducts.length);
+                // Temporarily bypass orphaned product filtering to test
+                console.log("Raw pending products (before orphaned filtering):", pendingProducts);
+                setNotifications(pendingProducts);
+                setPendingCount(pendingProducts.length);
             }
         } catch (error) {
             console.error("Error fetching pending products:", error);
@@ -348,6 +374,88 @@ const ProductsMain = () => {
         }
     };
 
+    // Handle edit product
+    const handleEdit = (product) => {
+        setIsEditing(true);
+        setEditingProduct(product);
+        setEditFormData({
+            name: product.name || "",
+            description: product.description || "",
+            price: product.price || "",
+            offerPrice: product.offerPrice || "",
+            brand: product.brand || "",
+            quantity: product.quantity || "",
+            feature: Array.isArray(product.feature) ? product.feature.join(", ") : (product.feature || ""),
+            speciality: product.speciality || "",
+            status: product.status || "active"
+        });
+        onOpen();
+    };
+
+    // Handle edit form submission
+    const handleEditSubmit = async () => {
+        setLoading(true);
+        try {
+            const updateData = {
+                ...editFormData,
+                feature: editFormData.feature ? editFormData.feature.split(",").map(f => f.trim()).filter(f => f) : [],
+                price: parseFloat(editFormData.price) || 0,
+                offerPrice: parseFloat(editFormData.offerPrice) || 0,
+                quantity: editFormData.quantity.toString()
+            };
+
+            const response = await axios.put(`/product/updateProduct/${editingProduct._id}`, updateData);
+            
+            if (response.status === 200 || response.status === 201) {
+                toast({ title: "Product updated successfully", status: "success" });
+                fetchData();
+                onClose();
+                setIsEditing(false);
+                setEditingProduct(null);
+                setEditFormData({
+                    name: "",
+                    description: "",
+                    price: "",
+                    offerPrice: "",
+                    brand: "",
+                    quantity: "",
+                    feature: "",
+                    speciality: "",
+                    status: "active"
+                });
+            } else {
+                throw new Error(`API returned status: ${response.status}`);
+            }
+        } catch (error) {
+            console.error("Error updating product:", error);
+            toast({ title: "Error updating product", status: "error" });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Handle delete product
+    const handleDelete = async () => {
+        setLoading(true);
+        try {
+            const response = await axios.delete(`/product/deleteProduct/${selectedProductID}`);
+            
+            if (response.status === 200 || response.status === 201) {
+                toast({ title: "Product deleted successfully", status: "success" });
+                closeAlert();
+                fetchData();
+                setSelectedProductID(null);
+            } else {
+                throw new Error(`API returned status: ${response.status}`);
+            }
+        } catch (error) {
+            console.error("Error deleting product:", error);
+            toast({ title: "Error deleting product", status: "error" });
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const getBusinessName = (businessData) => {
         // Handle both direct business object and business ID
         if (typeof businessData === 'object' && businessData?.name) {
@@ -435,17 +543,14 @@ const ProductsMain = () => {
                         colorScheme="purple" as={Button}>Actions</MenuButton>
                     <MenuList>
                         <MenuItem
-                            onClick={() => {
-                                // Edit functionality - placeholder
-                                toast({ title: "Edit functionality coming soon", status: "info" });
-                            }}
+                            onClick={() => handleEdit(original)}
                         >
                             ✏️ Edit
                         </MenuItem>
                         <MenuItem
                             onClick={() => {
-                                // Delete functionality - placeholder
-                                toast({ title: "Delete functionality coming soon", status: "info" });
+                                setSelectedProductID(original._id);
+                                openAlert();
                             }}
                         >
                             <MdDelete className="mr-2" /> Delete
@@ -463,15 +568,7 @@ const ProductsMain = () => {
                     <div className="flex gap-2 items-center">
                         <Button colorScheme="purple">Total Products: {(data || []).length}</Button>
                         <Button colorScheme="orange">Pending: {pendingCount}</Button>
-                        <Button
-                            colorScheme="blue"
-                            onClick={() => {
-                                // Add product functionality - placeholder
-                                toast({ title: "Add product functionality coming soon", status: "info" });
-                            }}
-                        >
-                            Add New Product
-                        </Button>
+                        
                     </div>
 
                     <div className="w-full mt-3 sm:w-auto sm:min-w-[300px] flex items-center gap-2">
@@ -597,26 +694,171 @@ const ProductsMain = () => {
                 />
             </section>
 
-            {/* Add Product Modal - Placeholder */}
+            {/* Edit Product Modal */}
             <Modal
                 isOpen={isOpen}
-                onClose={onClose}
+                onClose={() => {
+                    setIsEditing(false);
+                    setEditingProduct(null);
+                    onClose();
+                }}
                 size="4xl"
                 scrollBehavior="inside"
             >
                 <ModalOverlay />
                 <ModalContent className="rounded-2xl">
                     <ModalHeader className="text-xl font-bold">
-                        Add New Product
+                        {isEditing ? "Edit Product" : "Add New Product"}
                     </ModalHeader>
                     <ModalCloseButton />
                     <ModalBody>
-                        <div className="p-4 text-center text-gray-500">
-                            Add product form will be implemented here
-                        </div>
+                        {isEditing ? (
+                            <div className="space-y-4">
+                                <FormControl isRequired>
+                                    <FormLabel>Product Name</FormLabel>
+                                    <Input
+                                        value={editFormData.name}
+                                        onChange={(e) => setEditFormData({...editFormData, name: e.target.value})}
+                                        placeholder="Enter product name"
+                                    />
+                                </FormControl>
+                                
+                                <FormControl>
+                                    <FormLabel>Description</FormLabel>
+                                    <Textarea
+                                        value={editFormData.description}
+                                        onChange={(e) => setEditFormData({...editFormData, description: e.target.value})}
+                                        placeholder="Enter product description"
+                                        rows={3}
+                                    />
+                                </FormControl>
+                                
+                                <div className="grid grid-cols-2 gap-4">
+                                    <FormControl isRequired>
+                                        <FormLabel>Price (₹)</FormLabel>
+                                        <Input
+                                            type="number"
+                                            value={editFormData.price}
+                                            onChange={(e) => setEditFormData({...editFormData, price: e.target.value})}
+                                            placeholder="Enter price"
+                                        />
+                                    </FormControl>
+                                    
+                                    <FormControl>
+                                        <FormLabel>Offer Price (₹)</FormLabel>
+                                        <Input
+                                            type="number"
+                                            value={editFormData.offerPrice}
+                                            onChange={(e) => setEditFormData({...editFormData, offerPrice: e.target.value})}
+                                            placeholder="Enter offer price"
+                                        />
+                                    </FormControl>
+                                </div>
+                                
+                                <div className="grid grid-cols-2 gap-4">
+                                    <FormControl>
+                                        <FormLabel>Brand</FormLabel>
+                                        <Input
+                                            value={editFormData.brand}
+                                            onChange={(e) => setEditFormData({...editFormData, brand: e.target.value})}
+                                            placeholder="Enter brand"
+                                        />
+                                    </FormControl>
+                                    
+                                    <FormControl isRequired>
+                                        <FormLabel>Quantity</FormLabel>
+                                        <Input
+                                            value={editFormData.quantity}
+                                            onChange={(e) => setEditFormData({...editFormData, quantity: e.target.value})}
+                                            placeholder="Enter quantity"
+                                        />
+                                    </FormControl>
+                                </div>
+                                
+                                <FormControl>
+                                    <FormLabel>Features (comma-separated)</FormLabel>
+                                    <Input
+                                        value={editFormData.feature}
+                                        onChange={(e) => setEditFormData({...editFormData, feature: e.target.value})}
+                                        placeholder="Enter features separated by commas"
+                                    />
+                                </FormControl>
+                                
+                                <FormControl>
+                                    <FormLabel>Speciality</FormLabel>
+                                    <Input
+                                        value={editFormData.speciality}
+                                        onChange={(e) => setEditFormData({...editFormData, speciality: e.target.value})}
+                                        placeholder="Enter speciality"
+                                    />
+                                </FormControl>
+                                
+                                <FormControl>
+                                    <FormLabel>Status</FormLabel>
+                                    <Select
+                                        value={editFormData.status}
+                                        onChange={(e) => setEditFormData({...editFormData, status: e.target.value})}
+                                    >
+                                        <option value="active">Active</option>
+                                        <option value="inactive">Inactive</option>
+                                    </Select>
+                                </FormControl>
+                            </div>
+                        ) : (
+                            <div className="p-4 text-center text-gray-500">
+                                Add product form will be implemented here
+                            </div>
+                        )}
                     </ModalBody>
+                    <ModalFooter>
+                        {isEditing && (
+                            <>
+                                <Button variant="ghost" mr={3} onClick={() => {
+                                    setIsEditing(false);
+                                    setEditingProduct(null);
+                                    onClose();
+                                }}>
+                                    Cancel
+                                </Button>
+                                <Button 
+                                    colorScheme="blue" 
+                                    onClick={handleEditSubmit}
+                                    isLoading={loading}
+                                >
+                                    Update Product
+                                </Button>
+                            </>
+                        )}
+                    </ModalFooter>
                 </ModalContent>
             </Modal>
+
+            {/* Delete Confirmation Dialog */}
+            <AlertDialog
+                isOpen={isAlertOpen}
+                leastDestructiveRef={cancelRef}
+                onClose={closeAlert}
+                isCentered
+            >
+                <AlertDialogOverlay>
+                    <AlertDialogContent>
+                        <AlertDialogHeader fontSize="lg" fontWeight="bold">
+                            Delete Product
+                        </AlertDialogHeader>
+                        <AlertDialogBody>
+                            Are you sure you want to delete this product? This action cannot be undone.
+                        </AlertDialogBody>
+                        <AlertDialogFooter>
+                            <Button ref={cancelRef} onClick={closeAlert}>
+                                Cancel
+                            </Button>
+                            <Button colorScheme="red" onClick={handleDelete} ml={3} isLoading={loading}>
+                                Delete
+                            </Button>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialogOverlay>
+            </AlertDialog>
 
             {/* Rejection Modal */}
             <Modal

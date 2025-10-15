@@ -18,6 +18,7 @@ import {
   FormControl,
   FormLabel,
   Input,
+  Select,
   Spinner,
   InputGroup,
   InputLeftElement,
@@ -38,6 +39,7 @@ const CategorySection = () => {
     name: "",
     description: "",
     image: "",
+    type: "",
   });
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
@@ -77,7 +79,7 @@ console.log("Management & Services Categories:", managementCategories);
   // Open modal for add
   const openAddModal = () => {
     setIsEditMode(false);
-    setFormData({ name: "", description: "", image: "" });
+    setFormData({ name: "", description: "", image: "", type: "" });
     setModalOpen(true);
   };
 
@@ -89,6 +91,7 @@ console.log("Management & Services Categories:", managementCategories);
       name: category.name,
       description: category.description,
       image: category.image,
+      type: category.type ? category.type[0] : "",
     });
     setModalOpen(true);
   };
@@ -101,7 +104,7 @@ console.log("Management & Services Categories:", managementCategories);
   // Add / Edit submit
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const { name, description, image } = formData;
+    const { name, description, image, type } = formData;
 
     if (!name.trim() || !image.trim()) {
       toast({
@@ -120,6 +123,7 @@ console.log("Management & Services Categories:", managementCategories);
       description: description.trim() || "No description",
       image: image.trim(),
       isActive: true,
+      type: type ? [type] : [],
     };
 
     try {
@@ -136,7 +140,7 @@ console.log("Management & Services Categories:", managementCategories);
       }
       setModalOpen(false);
       fetchCategories();
-      setFormData({ name: "", description: "", image: "" });
+      setFormData({ name: "", description: "", image: "", type: "" });
     } catch (err) {
       toast({
         title: "Error",
@@ -320,6 +324,11 @@ console.log("Management & Services Categories:", managementCategories);
         <p className="text-gray-600 text-xs mb-1 truncate">
           {cat.description}
         </p>
+        {/* {cat.type && cat.type.length > 0 && (
+          <p className="text-blue-600 text-xs mb-1 font-medium">
+            Type: {cat.type[0]}
+          </p>
+        )} */}
 
         <HStack spacing={1} justify="center">
           <Menu>
@@ -401,6 +410,17 @@ console.log("Management & Services Categories:", managementCategories);
                     setFormData({ ...formData, image: e.target.value })
                   }
                 />
+              </FormControl>
+              <FormControl mb={4}>
+                <FormLabel>Category Type</FormLabel>
+                <Select
+                  placeholder="Select category type"
+                  value={formData.type || ""}
+                  onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                >
+                  <option value="Management & Service">Management & Service</option>
+                  <option value="Product-based Service">Product-based Service</option>
+                </Select>
               </FormControl>
             </ModalBody>
             <ModalFooter>

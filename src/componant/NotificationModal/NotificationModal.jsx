@@ -16,7 +16,7 @@ const NotificationModal = ({
         <ModalHeader>
           <HStack justify="space-between" align="center">
             <Text fontSize="lg" fontWeight="bold">
-              Pending Business Approvals
+              Pending Approvals
             </Text>
             <Badge colorScheme="red" variant="solid">
               {notifications.length} pending
@@ -28,74 +28,96 @@ const NotificationModal = ({
           {notifications.length === 0 ? (
             <Box textAlign="center" py={8}>
               <Text color="gray.500" fontSize="lg">
-                No pending businesses to review
+                No pending approvals to review
               </Text>
             </Box>
           ) : (
             <VStack spacing={4} align="stretch">
-              {notifications.map((notification, index) => (
-                <Box
-                  key={notification._id || index}
-                  p={4}
-                  border="1px solid"
-                  borderColor="gray.200"
-                  borderRadius="md"
-                  bg="white"
-                  _hover={{ bg: "gray.50" }}
-                >
-                  <VStack align="stretch" spacing={3}>
-                    <HStack justify="space-between" align="start">
-                      <VStack align="start" spacing={1}>
-                        <Text fontWeight="semibold" fontSize="md">
-                          {notification.name}
-                        </Text>
-                        <Text fontSize="sm" color="gray.600">
-                          Category: {typeof notification.category === 'object' 
-                            ? notification.category.name 
-                            : notification.category || 'N/A'}
-                        </Text>
-                        <Text fontSize="sm" color="gray.600">
-                          Owner: {notification.owner?.name || 'Unknown'}
-                        </Text>
-                        {notification.description && (
-                          <Text fontSize="sm" color="gray.500" noOfLines={2}>
-                            {notification.description}
+              {notifications.map((notification, index) => {
+                // Determine if this is a business or product notification
+                const isProductNotification = notification.type === 'product_submission';
+                const isBusinessNotification = notification.type === 'business_submission';
+                
+                return (
+                  <Box
+                    key={notification._id || index}
+                    p={4}
+                    border="1px solid"
+                    borderColor="gray.200"
+                    borderRadius="md"
+                    bg="white"
+                    _hover={{ bg: "gray.50" }}
+                  >
+                    <VStack align="stretch" spacing={3}>
+                      <HStack justify="space-between" align="start">
+                        <VStack align="start" spacing={1}>
+                          <Text fontWeight="semibold" fontSize="md">
+                            {isProductNotification ? notification.data?.productName || notification.title : notification.name}
                           </Text>
-                        )}
-                      </VStack>
-                      <Badge 
-                        colorScheme="orange" 
-                        variant="solid"
-                        fontSize="xs"
-                      >
-                        Pending
-                      </Badge>
-                    </HStack>
-                    
-                    <HStack justify="flex-end" spacing={2}>
-                      <Button
-                        size="sm"
-                        colorScheme="green"
-                        onClick={() => onApprove(notification._id)}
-                        isLoading={loading}
-                        loadingText="Approving..."
-                      >
-                        Approve
-                      </Button>
-                      <Button
-                        size="sm"
-                        colorScheme="red"
-                        variant="outline"
-                        onClick={() => onDeny(notification._id)}
-                        isLoading={loading}
-                        loadingText="Rejecting..."
-                      >
-                        Deny
-                      </Button>
-                    </HStack>
-                  </VStack>
-                </Box>
-              ))}
+                          <Text fontSize="sm" color="gray.600">
+                            Type: {isProductNotification ? 'Product Submission' : 'Business Submission'}
+                          </Text>
+                          {isProductNotification ? (
+                            <Text fontSize="sm" color="gray.600">
+                              Business: {notification.business?.name || 'Unknown'}
+                            </Text>
+                          ) : (
+                            <>
+                              <Text fontSize="sm" color="gray.600">
+                                Category: {typeof notification.category === 'object' 
+                                  ? notification.category.name 
+                                  : notification.category || 'N/A'}
+                              </Text>
+                              <Text fontSize="sm" color="gray.600">
+                                Owner: {notification.owner?.name || 'Unknown'}
+                              </Text>
+                            </>
+                          )}
+                          {notification.message && (
+                            <Text fontSize="sm" color="gray.500" noOfLines={2}>
+                              {notification.message}
+                            </Text>
+                          )}
+                          {notification.description && (
+                            <Text fontSize="sm" color="gray.500" noOfLines={2}>
+                              {notification.description}
+                            </Text>
+                          )}
+                        </VStack>
+                        <Badge 
+                          colorScheme={isProductNotification ? "blue" : "orange"} 
+                          variant="solid"
+                          fontSize="xs"
+                        >
+                          {isProductNotification ? "Product" : "Business"}
+                        </Badge>
+                      </HStack>
+                      
+                      <HStack justify="flex-end" spacing={2}>
+                        <Button
+                          size="sm"
+                          colorScheme="green"
+                          onClick={() => onApprove(notification._id)}
+                          isLoading={loading}
+                          loadingText="Approving..."
+                        >
+                          Approve
+                        </Button>
+                        <Button
+                          size="sm"
+                          colorScheme="red"
+                          variant="outline"
+                          onClick={() => onDeny(notification._id)}
+                          isLoading={loading}
+                          loadingText="Rejecting..."
+                        >
+                          Deny
+                        </Button>
+                      </HStack>
+                    </VStack>
+                  </Box>
+                );
+              })}
             </VStack>
           )}
         </ModalBody>

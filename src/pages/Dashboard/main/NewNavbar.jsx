@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { IoMdLogOut } from "react-icons/io";
 import { useUser } from "../../../hooks/use-user";
 import { useAuth } from "../../../componant/authentication/authentication";
 import { IoSettings } from "react-icons/io5";
 import { IoMdNotifications } from "react-icons/io";
+import { IoPerson, IoSettings as SettingsIcon } from "react-icons/io5";
 import axios from "../../../axios";
 import NotificationModal from "../../../componant/NotificationModal/NotificationModal";
 import Logo from '../../../Images/Burhanpur_transparent.png'
@@ -31,6 +32,7 @@ const NewNavbar = () => {
   const [pendingCount, setPendingCount] = useState(0);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const dropdownRef = useRef(null);
 
   // Fetch notifications for pending businesses from API (no localStorage dependency)
   const fetchNotifications = async () => {
@@ -40,11 +42,18 @@ const NewNavbar = () => {
       console.log("Notifications API response:", notificationsRes);
       if (notificationsRes.data && notificationsRes.status !== 404) {
         const notificationsData = notificationsRes.data.result?.notifications || notificationsRes.data || [];
-        // console.log("Raw notifications from API:", notificationsData);
+        console.log("Raw notifications from API:", notificationsData);
         
-        // Show all pending notifications from API (no localStorage filtering)
-        setNotifications(Array.isArray(notificationsData) ? notificationsData : []);
-        setPendingCount(Array.isArray(notificationsData) ? notificationsData.length : 0);
+        // Filter for both business and product notifications
+        const allNotifications = Array.isArray(notificationsData) ? notificationsData : [];
+        const businessNotifications = allNotifications.filter(n => n.type === 'business_submission');
+        const productNotifications = allNotifications.filter(n => n.type === 'product_submission');
+        
+        // Combine all notifications
+        const combinedNotifications = [...businessNotifications, ...productNotifications];
+        
+        setNotifications(combinedNotifications);
+        setPendingCount(combinedNotifications.length);
         return;
       }
     } catch (error) {
@@ -122,6 +131,23 @@ const NewNavbar = () => {
       clearInterval(interval);
     };
   }, [user]);
+
+  // Handle click outside to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsMenuOpen2(false);
+      }
+    };
+
+    if (isMenuOpen2) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isMenuOpen2]);
 
 
   const toggleDropdown = (menu) => {
@@ -314,49 +340,84 @@ const NewNavbar = () => {
         </button>
       </div>
 
-      {/* Profile Menu */}
-      <div
-        className={`w-60 absolute z-50 right-4 top-16 border border-purple p-2 ${isMenuOpen2 ? "" : "hidden"
-          } text-base list-none bg-bgWhite rounded-xl`}
-        id="user-dropdown"
-      >
-        <button
-          type="button"
-          className="absolute top-0 right-0 p-2 text-purple-500 hover:text-gray-500 dark:text-gray-300 dark:hover:text-gray-200 font-semibold"
-          onClick={() => setIsMenuOpen2(false)}
+      {/* User Menu Card */}
+      {isMenuOpen2 && (
+        <div
+          ref={dropdownRef}
+          className="absolute z-50 right-4 top-16 w-72 bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden"
+          id="user-dropdown"
         >
-          <svg className="w-6 h-6 font-semibold" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-
-        <br />
-        <div className="w-full flex flex-col justify-center items-center">
-          <div className="flex flex-col gap-2 justify-center items-center text-purple-500 font-oswald">
-            <div className="w-1/3 m-auto">
-              <img src={pro} alt="" className="rounded-full border m-auto" />
-            </div>
-
-            <div>
-              <h1 className="text-sm font-bold">{currentUser?.name || 'Admin'}</h1>
-              <p className="text-sm">{currentUser?.email || 'admin@example.com'}</p>
+          {/* User Info Section */}
+          <div className="px-6 py-4 bg-gradient-to-r from-purple-50 to-blue-50 border-b border-gray-100">
+            <div className="flex items-center space-x-3">
+              {/* User Avatar */}
+              <div className="w-12 h-12 rounded-full bg-gradient-to-r from-purple-500 to-purple-600 flex items-center justify-center text-white font-bold text-lg">
+                {currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'A'}
+              </div>
+              
+              {/* User Details */}
+              <div className="flex-1 min-w-0">
+                <h3 className="text-sm font-semibold text-gray-900 truncate">
+                  {currentUser?.name || 'Admin'}
+                </h3>
+                <p className="text-xs text-gray-500 truncate">
+                  {currentUser?.email || 'admin@example.com'}
+                </p>
+              </div>
             </div>
           </div>
-          <div className="w-full flex gap-4 justify-between items-center p-2 text-purple-500 font-oswald">
-            <div className="ml-4">
-              <p className="text-sm text-green font-semibold">Active Course</p>
-              <h1 className="font-bold text-purple-500">{currentUser?.planName || 'Admin Plan'}</h1>
-            </div>
 
-            <div className="mr-4 text-purple-500">
-              <IoMdLogOut onClick={() => {
+          {/* Divider */}
+          <div className="border-t border-gray-100"></div>
+
+          {/* Menu Options */}
+          <div className="py-2">
+            {/* Profile Option */}
+            <button
+              onClick={() => {
+                setIsMenuOpen2(false);
+                // Add profile navigation logic here
+                console.log('Navigate to profile');
+              }}
+              className="w-full flex items-center px-6 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-200"
+            >
+              <IoPerson className="w-5 h-5 mr-3 text-gray-500" />
+              <span>Profile</span>
+            </button>
+
+            {/* Settings Option */}
+            <button
+              onClick={() => {
+                setIsMenuOpen2(false);
+                // Add settings navigation logic here
+                console.log('Navigate to settings');
+              }}
+              className="w-full flex items-center px-6 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-200"
+            >
+              <SettingsIcon className="w-5 h-5 mr-3 text-gray-500" />
+              <span>Settings</span>
+            </button>
+          </div>
+
+          {/* Divider */}
+          <div className="border-t border-gray-100"></div>
+
+          {/* Logout Option */}
+          <div className="py-2">
+            <button
+              onClick={() => {
+                setIsMenuOpen2(false);
                 localStorage.removeItem("token");
                 navigate("/login");
-              }} size={25} cursor={"pointer"} />
-            </div>
+              }}
+              className="w-full flex items-center px-6 py-3 text-sm text-red-600 hover:bg-red-50 transition-colors duration-200"
+            >
+              <IoMdLogOut className="w-5 h-5 mr-3" />
+              <span>Logout</span>
+            </button>
           </div>
         </div>
-      </div>
+      )}
       
       {/* Notification Modal */}
       <NotificationModal

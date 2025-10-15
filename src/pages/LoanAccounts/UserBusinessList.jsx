@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useRef, useCallback } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import axios from "../../axios";
 import dayjs from "dayjs";
 import Table from "../../componant/Table/Table";
@@ -32,9 +32,11 @@ import {
 } from "@chakra-ui/react";
 import { MdDelete, MdEdit, MdSearch } from "react-icons/md";
 import RegisterBusinessForm from "../buisnesspart/buisnessComponents/RegisterBusinessForm";
+import AddProductModal from "./AddProductModal";
 
 const UserBusinessList = () => {
   const { userId } = useParams();
+  const navigate = useNavigate();
   const [businesses, setBusinesses] = useState([]);
   const [categories, setCategories] = useState([]);
   const [editingBusiness, setEditingBusiness] = useState(null);
@@ -45,30 +47,19 @@ const UserBusinessList = () => {
   const [businessStatus, setBusinessStatus] = useState(null); // 'pending', 'approved', 'denied'
   const [lastRefreshTime, setLastRefreshTime] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [leads, setLeads] = useState([]);
-  const [leadsLoading, setLeadsLoading] = useState(false);
-  const [selectedBusinessForLeads, setSelectedBusinessForLeads] = useState(null);
-  const [businessInfo, setBusinessInfo] = useState(null);
-  const [selectedBusinessForBooking, setSelectedBusinessForBooking] = useState(null);
-  const [bookings, setBookings] = useState([]);
-  const [bookingsLoading, setBookingsLoading] = useState(false);
-  const [bookingInfo, setBookingInfo] = useState(null);
+  const [businessProducts, setBusinessProducts] = useState({}); // Track which businesses have products
+  const [selectedBusinessForProduct, setSelectedBusinessForProduct] = useState(null);
   const toast = useToast();
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const { 
+    isOpen: isAddProductOpen, 
+    onOpen: onAddProductOpen, 
+    onClose: onAddProductClose 
+  } = useDisclosure();
   const {
     isOpen: isAlertOpen,
     onOpen: openAlert,
     onClose: closeAlert,
-  } = useDisclosure();
-  const {
-    isOpen: isLeadsOpen,
-    onOpen: openLeads,
-    onClose: closeLeads,
-  } = useDisclosure();
-  const {
-    isOpen: isBookingOpen,
-    onOpen: openBooking,
-    onClose: closeBooking,
   } = useDisclosure();
   const cancelRef = useRef();
   const refreshTimeoutRef = useRef(null);
@@ -84,6 +75,71 @@ const UserBusinessList = () => {
       fetchBusinesses(true);
     }, delay);
   }, []);
+
+  // Check if a business has products
+  const checkBusinessProducts = async (businessId) => {
+    try {
+      const response = await axios.get(`/product/business/${businessId}`);
+      console.log("Product response for business", businessId, ":", response);
+      
+      // Handle different possible response structures
+      let products = [];
+      if (response.data && Array.isArray(response.data)) {
+        // Direct array response
+        products = response.data;
+      } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
+        // Nested data structure
+        products = response.data.data;
+      } else if (response.data && response.data.result && Array.isArray(response.data.result)) {
+        // Result structure
+        products = response.data.result;
+      } else if (response.data && response.data.products && Array.isArray(response.data.products)) {
+        // Products property
+        products = response.data.products;
+      } else if (response.data && response.data.result && response.data.result.products && Array.isArray(response.data.result.products)) {
+        // Nested result.products structure (your specific case)
+        products = response.data.result.products;
+      }
+      
+      const hasProducts = products && products.length > 0;
+      console.log("Business", businessId, "has products:", hasProducts, "count:", products.length);
+      
+      // Special debugging for Shree Clinic
+      if (businessId === "68e633dd36b96968cc80718b") {
+        console.log("=== SHREE CLINIC DEBUG ===");
+        console.log("Full response:", response);
+        console.log("Response data:", response.data);
+        console.log("Response data.result:", response.data?.result);
+        console.log("Response data.result.products:", response.data?.result?.products);
+        console.log("Products array:", products);
+        console.log("Has products:", hasProducts);
+        console.log("=== END DEBUG ===");
+      }
+      
+      setBusinessProducts(prev => ({
+        ...prev,
+        [businessId]: hasProducts
+      }));
+      return hasProducts;
+    } catch (error) {
+      console.error('Error checking products for business:', businessId, error);
+      setBusinessProducts(prev => ({
+        ...prev,
+        [businessId]: false
+      }));
+      return false;
+    }
+  };
+
+  // Check products for all businesses
+  const checkAllBusinessProducts = async (businessList) => {
+    console.log("Checking products for", businessList.length, "businesses");
+    const productChecks = businessList.map(business => 
+      checkBusinessProducts(business._id)
+    );
+    await Promise.all(productChecks);
+    console.log("Final businessProducts state:", businessProducts);
+  };
 
   // Fetch businesses & categories with optimized caching
   const fetchBusinesses = async (forceRefresh = false) => {
@@ -134,6 +190,9 @@ const UserBusinessList = () => {
         setBusinesses(businessesWithStatus);
         setLastRefreshTime(new Date().toISOString());
         console.log('Businesses updated:', businessesWithStatus.length, 'total businesses');
+        
+        // Check products for all businesses
+        await checkAllBusinessProducts(businessesWithStatus);
       } catch (err) {
         console.error('Error fetching businesses:', err);
       } finally {
@@ -193,6 +252,11 @@ const UserBusinessList = () => {
       };
     }
   }, [userId]);
+
+  // Monitor businessProducts state changes
+  useEffect(() => {
+    console.log("businessProducts state updated:", businessProducts);
+  }, [businessProducts]);
 
   useEffect(() => {
     fetchBusinesses();
@@ -299,44 +363,21 @@ const UserBusinessList = () => {
     }
   };
 
-  // Handle leads modal
-  const openLeadsModal = async (businessId, businessName) => {
-    setSelectedBusinessForLeads({ id: businessId, name: businessName });
-    setLeadsLoading(true);
-    openLeads();
-    
-    try {
-      const response = await axios.get(`/bussiness/leads/${businessId}`);
-      console.log("Leads API response:", response);
-      
-      if (response?.data && response.status !== 404) {
-        // Handle the specific API response structure
-        const leadsData = response.data.result?.leads || response.data.leads || [];
-        const businessInfo = response.data.result || {};
-        console.log("Leads for business:", businessId, leadsData);
-        console.log("Business info:", businessInfo);
-        setLeads(Array.isArray(leadsData) ? leadsData : []);
-        setBusinessInfo(businessInfo);
-      } else {
-        console.log("No leads found for business:", businessId);
-        setLeads([]);
-        setBusinessInfo(null);
-      }
-    } catch (error) {
-      console.error("Error fetching leads:", error);
-      setLeads([]);
-      toast({ title: "Error fetching leads", status: "error" });
-    } finally {
-      setLeadsLoading(false);
-    }
+  // Handle Add Product modal
+  const handleAddProduct = (business) => {
+    setSelectedBusinessForProduct(business);
+    onAddProductOpen();
   };
 
-  const closeLeadsModal = () => {
-    closeLeads();
-    setSelectedBusinessForLeads(null);
-    setLeads([]);
-    setBusinessInfo(null);
+  // Handle product added successfully
+  const handleProductAdded = () => {
+    // Refresh the business products check
+    if (selectedBusinessForProduct) {
+      checkBusinessProducts(selectedBusinessForProduct._id);
+    }
+    setSelectedBusinessForProduct(null);
   };
+
 
   // Helper function to get category type
   const getCategoryType = (category, categories) => {
@@ -366,41 +407,6 @@ const UserBusinessList = () => {
     return type;
   };
 
-  // Handle booking modal
-  const openBookingModal = async (businessId, businessName) => {
-    setSelectedBusinessForBooking({ id: businessId, name: businessName });
-    setBookingsLoading(true);
-    openBooking();
-    
-    try {
-      const response = await axios.get(`/bookings/business/${businessId}`);
-      console.log("Booking API response", response)
-      
-      if (response?.data && response.status !== 404) {
-        // Handle the specific API response structure
-        const bookingsData = response.data?.data || [];
-        setBookings(Array.isArray(bookingsData) ? bookingsData : []);
-        setBookingInfo(response.data);
-      } else {
-        console.log("No bookings found for business:", businessId);
-        setBookings([]);
-        setBookingInfo(null);
-      }
-    } catch (error) {
-      console.error("Error fetching bookings:", error);
-      setBookings([]);
-      toast({ title: "Error fetching bookings", status: "error" });
-    } finally {
-      setBookingsLoading(false);
-    }
-  };
-
-  const closeBookingModal = () => {
-    closeBooking();
-    setSelectedBusinessForBooking(null);
-    setBookings([]);
-    setBookingInfo(null);
-  };
 
   const columns = useMemo(() => [
     { Header: "#", Cell: ({ row: { index } }) => <Cell text={index + 1} /> },
@@ -436,7 +442,19 @@ const UserBusinessList = () => {
       Header: "Actions",
       Cell: ({ row: { original } }) => {
         const categoryType = getCategoryType(original.category, categories);
-        console.log("Actions Cell - Business:", original.name, "Category:", original.category, "CategoryType:", categoryType, "Categories length:", categories.length);
+        const hasProducts = businessProducts[original._id];
+        console.log("Actions Cell - Business:", original.name, "Category:", original.category, "CategoryType:", categoryType, "HasProducts:", hasProducts, "Categories length:", categories.length);
+        
+        // Special debugging for Shree Clinic
+        if (original._id === "68e633dd36b96968cc80718b") {
+          console.log("=== SHREE CLINIC ACTIONS DEBUG ===");
+          console.log("Business ID:", original._id);
+          console.log("Business name:", original.name);
+          console.log("businessProducts state:", businessProducts);
+          console.log("hasProducts value:", hasProducts);
+          console.log("Will show button:", hasProducts ? "View Products" : "Add Product");
+          console.log("=== END ACTIONS DEBUG ===");
+        }
         
         return (
           <Menu>
@@ -454,26 +472,34 @@ const UserBusinessList = () => {
               }}>
                 <MdDelete className="mr-2" /> Delete
               </MenuItem>
-              {categoryType === "Product-based service" && (
-                <MenuItem onClick={() => openLeadsModal(original._id, original.name)}>
+              {categoryType && categoryType.toLowerCase().includes("product-based") && (
+                <MenuItem onClick={() => navigate(`/dash/business-leads/${original._id}`)}>
                   📊 Leads
                 </MenuItem>
               )}
-              {categoryType === "Management & Service" && (
-                <MenuItem onClick={() => openBookingModal(original._id, original.name)}>
+              {categoryType && categoryType.toLowerCase().includes("management") && (
+                <MenuItem onClick={() => navigate(`/dash/business-bookings/${original._id}`)}>
                   📅 Booking
                 </MenuItem>
               )}
               
-              
-              
+              {/* Dynamic Products Button */}
+              {hasProducts ? (
+                <MenuItem onClick={() => navigate(`/dash/admin/view-products/${original._id}`)}>
+                  📦 View Products
+                </MenuItem>
+              ) : (
+                <MenuItem onClick={() => handleAddProduct(original)}>
+                  ➕ Add Product
+                </MenuItem>
+              )}
               
             </MenuList>
           </Menu>
         );
       },
     },
-  ], [businesses, categories]);
+  ], [businesses, categories, businessProducts]);
 
   // Filter businesses based on search - only show approved/denied, hide pending
   const filteredBusinesses = useMemo(() => {
@@ -569,7 +595,7 @@ const UserBusinessList = () => {
         </div>
       </div>
 
-      <Table data={filteredBusinesses} columns={columns} />
+      <Table data={[...filteredBusinesses].reverse()} columns={columns} />
 
       {/* Business Form Modal */}
       <Modal isOpen={isOpen} onClose={() => { setEditingBusiness(null); onClose(); }} size="lg">
@@ -601,489 +627,15 @@ const UserBusinessList = () => {
         </AlertDialogOverlay>
       </AlertDialog>
 
-      {/* Leads Modal */}
-      <Modal
-        isOpen={isLeadsOpen}
-        onClose={closeLeadsModal}
-        size="6xl"
-        scrollBehavior="outside"
-      >
-        <ModalOverlay 
-          bg="blackAlpha.600" 
-          backdropFilter="blur(10px)"
-        />
-        <ModalContent 
-          className="rounded-2xl shadow-2xl border-0"
-          bg="white"
-          maxH="85vh"
-        >
-          <ModalHeader 
-            className="bg-gradient-to-r from-purple-600 to-purple-800 text-white rounded-t-2xl"
-            py={4}
-            px={6}
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex-1">
-                <h2 className="text-sm font-medium mb-1 text-purple-100">
-                  Business Leads
-                </h2>
-                <p className="text-white text-xl font-bold mb-2 drop-shadow-md">
-                  {businessInfo?.businessName || selectedBusinessForLeads?.name || 'Business'}
-                </p>
-                {businessInfo?.totalLeads && (
-                  <div className="flex items-center gap-3">
-                    <span className="bg-white bg-opacity-20 px-3 py-1 rounded-full text-xs font-medium text-white">
-                      {businessInfo.totalLeads} Total Leads
-                    </span>
-                    {businessInfo?.activeLeads !== undefined && (
-                      <span className="bg-green-400 bg-opacity-20 px-3 py-1 rounded-full text-xs font-medium text-white">
-                        {businessInfo.activeLeads} Active
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          </ModalHeader>
-          <ModalCloseButton 
-            color="white"
-            bg="rgba(255,255,255,0.2)"
-            _hover={{ bg: "rgba(255,255,255,0.3)" }}
-            size="lg"
-            top={4}
-            right={4}
-          />
-          <ModalBody className="p-0">
-            {leadsLoading ? (
-              <div className="flex flex-col justify-center items-center py-16 bg-gradient-to-br from-purple-50 to-blue-50">
-                <div className="relative">
-                  <div className="animate-spin rounded-full h-16 w-16 border-4 border-purple-200"></div>
-                  <div className="animate-spin rounded-full h-16 w-16 border-4 border-purple-500 border-t-transparent absolute top-0 left-0"></div>
-                </div>
-                <div className="mt-6 text-center">
-                  <h3 className="text-lg font-semibold text-gray-700 mb-2">Loading Leads</h3>
-                  <p className="text-gray-500">Fetching lead data for this business...</p>
-                </div>
-              </div>
-            ) : leads.length === 0 ? (
-              <div className="flex flex-col justify-center items-center py-16 bg-gradient-to-br from-purple-50 to-blue-50">
-                <div className="text-6xl mb-4">📋</div>
-                <h3 className="text-xl font-semibold text-gray-700 mb-2">No Leads Found</h3>
-                <p className="text-gray-500 text-center max-w-md">
-                  No leads have been generated for this business yet. 
-                  Leads will appear here once customers start showing interest.
-                </p>
-                <div className="mt-6 bg-purple-50 border border-purple-200 rounded-lg p-4 max-w-md">
-                  <div className="flex items-center">
-                    <div className="text-2xl mr-3">💡</div>
-                    <div className="text-sm text-purple-700">
-                      <strong>Tip:</strong> Encourage customers to contact this business to generate leads.
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="bg-white">
-                <div className="px-6 py-4 bg-gradient-to-r from-purple-50 to-blue-50 border-b">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-semibold text-gray-800">Lead Details</h3>
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <span className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full font-medium">
-                        {leads.length} Records
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <div className="overflow-x-auto overflow-y-auto max-h-80">
-                  <table className="min-w-full">
-                    <thead className="bg-gradient-to-r from-purple-50 to-blue-50 sticky top-0 z-10">
-                      <tr>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                          Lead Name
-                        </th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                          Email
-                        </th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                          Phone
-                        </th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                          Message
-                        </th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                          Date
-                        </th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                          Status
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-100">
-                      {leads.map((lead, index) => {
-                        // Handle the specific API response structure
-                        const leadData = lead._id || lead;
-                        const leadId = leadData._id || lead._id || index;
-                        const leadName = leadData.name || lead.name || 'N/A';
-                        const leadEmail = leadData.email || lead.email || 'N/A';
-                        const leadPhone = leadData.phone || lead.phone || lead.contact || 'N/A';
-                        const leadMessage = leadData.message || leadData.description || lead.message || lead.description || 'N/A';
-                        const leadDate = leadData.createdAt || lead.createdAt || leadData.date || lead.date;
-                        const leadStatus = leadData.status || lead.status || (leadData.isActive ? 'Active' : 'Inactive');
-                        
-                        return (
-                          <tr 
-                            key={leadId} 
-                            className={`transition-all duration-200 hover:bg-gradient-to-r hover:from-purple-50 hover:to-blue-50 hover:shadow-md group ${
-                              index % 2 === 0 ? "bg-white" : "bg-gray-50"
-                            }`}
-                          >
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="flex items-center">
-                                <div className="flex-shrink-0 h-10 w-10">
-                                  <div className="h-10 w-10 rounded-full bg-gradient-to-r from-purple-500 to-purple-700 flex items-center justify-center text-white font-semibold text-sm shadow-lg">
-                                    {leadName.charAt(0).toUpperCase()}
-                                  </div>
-                                </div>
-                                <div className="ml-4">
-                                  <div className="text-sm font-semibold text-gray-900 group-hover:text-purple-700 transition-colors">
-                                    {leadName}
-                                  </div>
-                                  <div className="text-xs text-gray-500">Lead #{index + 1}</div>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm text-gray-600">
-                                <a 
-                                  href={`mailto:${leadEmail}`}
-                                  className="text-blue-600 hover:text-blue-800 hover:underline transition-colors"
-                                >
-                                  {leadEmail}
-                                </a>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm text-gray-600">
-                                {leadPhone !== 'N/A' ? (
-                                  <a 
-                                    href={`tel:${leadPhone}`}
-                                    className="text-green-600 hover:text-green-800 hover:underline transition-colors"
-                                  >
-                                    {leadPhone}
-                                  </a>
-                                ) : (
-                                  <span className="text-gray-400">Not provided</span>
-                                )}
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 text-sm text-gray-600 max-w-xs">
-                              <div className="truncate group-hover:bg-white group-hover:shadow-sm group-hover:rounded group-hover:p-2 transition-all" title={leadMessage}>
-                                {leadMessage}
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              <div className="flex items-center">
-                                <span className="bg-purple-100 px-2 py-1 rounded text-xs text-purple-800">
-                                  {leadDate ? new Date(leadDate).toLocaleDateString() : 'N/A'}
-                                </span>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold transition-all duration-200 ${
-                                leadStatus === 'New' || leadStatus === 'new' ? 'bg-blue-500 text-white shadow-lg' :
-                                leadStatus === 'In Progress' || leadStatus === 'in_progress' ? 'bg-yellow-500 text-white shadow-lg' :
-                                leadStatus === 'Converted' || leadStatus === 'converted' ? 'bg-green-500 text-white shadow-lg' :
-                                leadStatus === 'Active' ? 'bg-green-500 text-white shadow-lg' :
-                                leadStatus === 'Inactive' ? 'bg-gray-500 text-white shadow-lg' :
-                                'bg-gray-500 text-white shadow-lg'
-                              }`}>
-                                {leadStatus}
-                              </span>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </ModalBody>
-          <ModalFooter className="bg-gradient-to-r from-purple-50 to-blue-50 px-6 py-4 rounded-b-2xl">
-            <div className="flex items-center justify-between w-full">
-              <div className="flex items-center gap-4 text-sm text-gray-600">
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 bg-green-400 rounded-full"></span>
-                  <span>Active Leads</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 bg-gray-400 rounded-full"></span>
-                  <span>Inactive Leads</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <Button 
-                  variant="outline" 
-                  colorScheme="purple"
-                  onClick={closeLeadsModal}
-                  className="hover:bg-purple-50 transition-colors border-purple-300"
-                >
-                  Export Data
-                </Button>
-                <Button 
-                  colorScheme="purple" 
-                  onClick={closeLeadsModal}
-                  className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 transition-all duration-200 shadow-lg hover:shadow-xl"
-                >
-                  Close
-                </Button>
-              </div>
-            </div>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+      {/* Add Product Modal */}
+      <AddProductModal
+        isOpen={isAddProductOpen}
+        onClose={onAddProductClose}
+        businessId={selectedBusinessForProduct?._id}
+        businessName={selectedBusinessForProduct?.name}
+        onProductAdded={handleProductAdded}
+      />
 
-      {/* Booking Modal */}
-        <Modal
-          isOpen={isBookingOpen}
-          onClose={closeBookingModal}
-          size="full"
-          scrollBehavior="outside"
-        >
-          <ModalOverlay 
-            bg="blackAlpha.600" 
-            backdropFilter="blur(10px)"
-          />
-          <ModalContent 
-            className="rounded-2xl shadow-2xl border-0"
-            bg="white"
-            maxH="90vh"
-            maxW="90vw"
-            my={4}
-          >
-          {/* Business Name Header */}
-          <div className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white px-6 py-4 border-b-2 border-blue-200">
-            <div className="flex items-center justify-between">
-              <h1 className="text-xl font-bold text-black">
-                {bookingInfo?.businessName || selectedBusinessForBooking?.name || 'Business'}
-              </h1>
-              <div className="flex items-center gap-6 text-blue-800 text-sm">
-                <span>Total Bookings: {bookingInfo?.totalBookings || bookings.length}</span>
-                <span>•</span>
-                <span>Active: {bookingInfo?.activeBookings || bookings.filter(b => b.status === 'confirmed').length}</span>
-              </div>
-            </div>
-          </div>
-
-          <ModalCloseButton
-            color="white"
-            bg="rgba(255,255,255,0.2)"
-            _hover={{ bg: "rgba(255,255,255,0.3)" }}
-            size="lg"
-            top={4}
-            right={4}
-          />
-          <ModalBody className="p-0">
-            {bookingsLoading ? (
-              <div className="flex flex-col justify-center items-center py-16 bg-gradient-to-br from-blue-50 to-indigo-50">
-                <div className="relative">
-                  <div className="animate-spin rounded-full h-16 w-16 border-4 border-blue-200"></div>
-                  <div className="animate-spin rounded-full h-16 w-16 border-4 border-blue-500 border-t-transparent absolute top-0 left-0"></div>
-                </div>
-                <div className="mt-6 text-center">
-                  <h3 className="text-lg font-semibold text-gray-700 mb-2">Loading Bookings</h3>
-                  <p className="text-gray-500">Fetching booking data for this business...</p>
-                </div>
-              </div>
-            ) : bookings.length === 0 ? (
-              <div className="flex flex-col justify-center items-center py-16 bg-gradient-to-br from-blue-50 to-indigo-50">
-                <div className="text-6xl mb-4">📅</div>
-                <h3 className="text-xl font-semibold text-gray-700 mb-2">No Bookings Found</h3>
-                <p className="text-gray-500 text-center max-w-md">
-                  No bookings have been made for this business yet. 
-                  Bookings will appear here once customers start making reservations.
-                </p>
-                <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md">
-                  <div className="flex items-center">
-                    <div className="text-2xl mr-3">💡</div>
-                    <div className="text-sm text-blue-700">
-                      <strong>Tip:</strong> Encourage customers to make bookings for this business.
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="bg-white">
-                <div className="px-4 py-3 bg-gradient-to-r from-blue-50 to-indigo-50 border-b">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-semibold text-gray-800">Booking Details</h3>
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full font-medium">
-                        {bookings.length} Records
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <div className="overflow-x-auto overflow-y-auto max-h-[500px]">
-                  <table className="min-w-full border-collapse">
-                    <thead className="bg-gray-50 sticky top-0 z-10">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">
-                          Customer
-                        </th>
-                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">
-                          Service
-                        </th>
-                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">
-                          Amount
-                        </th>
-                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">
-                          Scheduled
-                        </th>
-                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">
-                          Status
-                        </th>
-                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-200">
-                          Payment
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {bookings.map((booking, index) => {
-                        const bookingId = booking.booking_id;
-                        const customerName = booking.extra_details?.customer_name || booking.user_id?.name || 'N/A';
-                        const customerPhone = booking.extra_details?.customer_phone || booking.user_id?.phone || 'N/A';
-                        const serviceName = booking.extra_details?.service_name || booking.product_id?.name || 'N/A';
-                        const amount = booking.amount || 0;
-                        const bookingDate = booking.booking_date;
-                        const scheduledDate = booking.scheduled_date;
-                        const startTime = booking.start_time || 'N/A';
-                        const status = booking.status || 'pending';
-                        const paymentStatus = booking.payment_status || 'pending';
-                        
-                        return (
-                          <tr 
-                            key={booking._id} 
-                            className={`transition-all duration-200 hover:bg-blue-50 hover:shadow-sm group border-b border-gray-100 ${
-                              index % 2 === 0 ? "bg-white" : "bg-gray-50"
-                            }`}
-                          >
-                            <td className="px-4 py-3 whitespace-nowrap">
-                              <div className="flex items-center">
-                                <div className="flex-shrink-0 h-8 w-8">
-                                  <div className="h-8 w-8 rounded-full bg-gradient-to-r from-blue-500 to-blue-700 flex items-center justify-center text-white font-semibold text-xs shadow-lg">
-                                    {customerName.charAt(0).toUpperCase()}
-                                  </div>
-                                </div>
-                                <div className="ml-3">
-                                  <div className="text-sm font-semibold text-gray-900 group-hover:text-blue-700 transition-colors">
-                                    {customerName}
-                                  </div>
-                                  {customerPhone !== 'N/A' && (
-                                    <a 
-                                      href={`tel:${customerPhone}`}
-                                      className="text-xs text-green-600 hover:text-green-800 hover:underline transition-colors"
-                                    >
-                                      {customerPhone}
-                                    </a>
-                                  )}
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 text-sm text-gray-600">
-                              <div className="truncate max-w-xs" title={serviceName}>
-                                {serviceName}
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 font-semibold">
-                              ₹{amount.toLocaleString()}
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                              <div className="flex flex-col">
-                                <span className="bg-blue-100 px-2 py-1 rounded text-xs text-blue-800 mb-1">
-                                  {scheduledDate ? new Date(scheduledDate).toLocaleDateString() : 'N/A'}
-                                </span>
-                                {startTime !== 'N/A' && (
-                                  <span className="bg-gray-100 px-2 py-1 rounded text-xs text-gray-600">
-                                    {startTime}
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap">
-                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-bold uppercase tracking-wide transition-all duration-200 ${
-                                status === 'Confirmed' || status === 'confirmed' ? 'bg-green-500 text-white shadow-md' :
-                                status === 'Pending' || status === 'pending' ? 'bg-amber-500 text-white shadow-md' :
-                                status === 'Cancelled' || status === 'cancelled' ? 'bg-red-500 text-white shadow-md' :
-                                status === 'Completed' || status === 'completed' ? 'bg-blue-500 text-white shadow-md' :
-                                'bg-gray-500 text-white shadow-md'
-                              }`}>
-                                {status}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap">
-                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-bold uppercase tracking-wide transition-all duration-200 ${
-                                paymentStatus === 'Paid' || paymentStatus === 'paid' ? 'bg-green-500 text-white shadow-md' :
-                                paymentStatus === 'Pending' || paymentStatus === 'pending' ? 'bg-amber-500 text-white shadow-md' :
-                                paymentStatus === 'Failed' || paymentStatus === 'failed' ? 'bg-red-500 text-white shadow-md' :
-                                paymentStatus === 'Refunded' || paymentStatus === 'refunded' ? 'bg-purple-500 text-white shadow-md' :
-                                'bg-gray-500 text-white shadow-md'
-                              }`}>
-                                {paymentStatus}
-                              </span>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </ModalBody>
-          <ModalFooter className="bg-gray-50 px-6 py-4 rounded-b-2xl border-t border-gray-200">
-            <div className="flex items-center justify-between w-full">
-              {/* Summary Stats */}
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <span className="w-3 h-3 bg-green-500 rounded-full"></span>
-                  <span className="font-medium">Confirmed: {bookings.filter(b => b.status === 'confirmed').length}</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <span className="w-3 h-3 bg-amber-500 rounded-full"></span>
-                  <span className="font-medium">Pending: {bookings.filter(b => b.status === 'pending').length}</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <span className="w-3 h-3 bg-red-500 rounded-full"></span>
-                  <span className="font-medium">Cancelled: {bookings.filter(b => b.status === 'cancelled').length}</span>
-                </div>
-                <div className="text-sm text-gray-600 border-l border-gray-300 pl-4">
-                  <span className="font-semibold">Total: ₹{bookings.reduce((sum, b) => sum + (b.amount || 0), 0).toLocaleString()}</span>
-                </div>
-              </div>
-              
-              {/* Action Buttons */}
-              <div className="flex items-center gap-3">
-                <Button 
-                  variant="outline" 
-                  colorScheme="blue"
-                  onClick={closeBookingModal}
-                  className="hover:bg-blue-50 transition-colors border-blue-300"
-                >
-                  Export Data
-                </Button>
-                <Button 
-                  colorScheme="blue" 
-                  onClick={closeBookingModal}
-                  className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl"
-                >
-                  Close
-                </Button>
-              </div>
-            </div>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
     </div>
   );
 };

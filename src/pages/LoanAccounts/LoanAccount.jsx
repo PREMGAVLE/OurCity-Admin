@@ -221,7 +221,7 @@ function UserManagement() {
           </DrawerHeader>
           <DrawerBody>
   {userBusinesses[selectedUserIdForBusiness]?.length > 0 ? (
-    userBusinesses[selectedUserIdForBusiness].map((biz, idx) => (
+    [...userBusinesses[selectedUserIdForBusiness]].reverse().map((biz, idx) => (
       <Box key={biz._id || idx} className="mb-4">
         <p><strong>Name:</strong> {biz?.name || "N/A"}</p>
         <p>
